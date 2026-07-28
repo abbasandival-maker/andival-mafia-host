@@ -821,3 +821,7 @@ player.role !== "sniper" && (
     </div>
     
 )}
+      </div>
+    </main>
+  );
+}
