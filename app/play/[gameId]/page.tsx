@@ -48,6 +48,7 @@ export default function PlayPage({ params }: Props) {
   const [phase, setPhase] = useState<"night" | "day">("night");
   const [gameStatus, setGameStatus] = useState("");
   const [winner, setWinner] = useState("");
+const [dayVotingOpen, setDayVotingOpen] = useState(false);
 
   const [selectedTarget, setSelectedTarget] =
     useState<string | null>(null);
@@ -92,8 +93,9 @@ const [chatInput, setChatInput] = useState("");
       if (!game) return;
 
       setPhase(game.phase);
-      setGameStatus(game.status ?? "");
-      setWinner(game.winner ?? "");
+setGameStatus(game.status ?? "");
+setWinner(game.winner ?? "");
+setDayVotingOpen(game.dayVotingOpen ?? false);
     });
 
     return () => unsubscribe();
@@ -298,11 +300,31 @@ if (!player) {
     </main>
   );
 }
-
+const isNight = phase === "night";
 return (
-  <main className="min-h-screen bg-[#0B0B0F] text-white flex items-center justify-center p-6">
+  <main
+  className={`min-h-screen flex items-center justify-center p-6 transition-all duration-700
 
-    <div className="w-full max-w-lg rounded-2xl bg-zinc-900 border border-zinc-700 p-8">
+${
+isNight
+? "bg-gradient-to-b from-black via-zinc-900 to-slate-950 text-white"
+: "bg-gradient-to-b from-sky-100 via-white to-yellow-50 text-zinc-900"
+}
+
+`}
+>
+
+    <div
+className={`w-full max-w-lg rounded-2xl p-8 border transition-all duration-700
+
+${
+isNight
+? "bg-zinc-900 border-zinc-700"
+: "bg-white border-slate-300 shadow-2xl"
+}
+
+`}
+>
 
       <p className="text-gray-400">
         Room
@@ -394,13 +416,26 @@ return (
 
         <div className="mt-3 flex gap-2">
           <input
-            value={chatInput}
-            onChange={(e) =>
-              setChatInput(e.target.value)
-            }
-            placeholder="Message..."
-            className="flex-1 rounded-lg bg-zinc-800 p-3"
-          />
+  value={chatInput}
+  onChange={(e) =>
+    setChatInput(e.target.value)
+  }
+
+  onKeyDown={async (e) => {
+
+    if (e.key !== "Enter") return;
+
+    e.preventDefault();
+
+    if (!chatInput.trim()) return;
+
+    await handleSendMessage();
+
+  }}
+
+  placeholder="Message..."
+  className="flex-1 rounded-lg bg-zinc-800 p-3"
+/>
 
           <button
             onClick={handleSendMessage}
@@ -434,13 +469,34 @@ return (
                     setSelectedTarget(target.id)
                   }
                   disabled={loading}
-                  className={`w-full rounded-xl p-4 text-left transition ${
-                    selectedTarget === target.id
-                      ? "border-2 border-red-400 bg-red-700"
-                      : "bg-zinc-800 hover:bg-red-700"
-                  }`}
+                  className={`group w-full rounded-xl p-4 text-left transition-all duration-200 transform
+
+${
+selectedTarget === target.id
+? "border-2 border-red-400 bg-red-700 scale-105 shadow-lg shadow-red-600/50"
+: "bg-zinc-800 hover:bg-red-700 hover:scale-105 hover:shadow-lg hover:shadow-red-600/40"
+}
+`}
                 >
-                  {target.nickname}
+                  <div className="flex items-center justify-between">
+
+  <span>
+
+    {(selectedTarget === target.id) && "🔫 "}
+
+    {target.nickname}
+
+  </span>
+
+  {selectedTarget === target.id && (
+
+    <span className="text-2xl">
+      ✅
+    </span>
+
+  )}
+
+</div>
                 </button>
               ))}
           </div>
@@ -505,13 +561,34 @@ return (
             key={target.id}
             onClick={() => setSelectedDoctorTarget(target.id)}
             disabled={loading}
-            className={`w-full rounded-xl transition p-4 text-left ${
-              selectedDoctorTarget === target.id
-                ? "bg-blue-700 border-2 border-blue-400"
-                : "bg-zinc-800 hover:bg-blue-700"
-            }`}
+            className={`group w-full rounded-xl transition-all duration-200 transform p-4 text-left
+
+${
+selectedDoctorTarget === target.id
+? "bg-blue-700 border-2 border-blue-400 scale-105 shadow-lg shadow-blue-500/50"
+: "bg-zinc-800 hover:bg-blue-700 hover:scale-105 hover:shadow-lg hover:shadow-blue-500/40"
+}
+`}
           >
-            {target.nickname}
+            <div className="flex items-center justify-between">
+
+  <span>
+
+    {selectedDoctorTarget === target.id && "🩺 "}
+
+    {target.nickname}
+
+  </span>
+
+  {selectedDoctorTarget === target.id && (
+
+    <span className="text-2xl">
+      ✅
+    </span>
+
+  )}
+
+</div>
           </button>
 
         ))}
@@ -584,13 +661,34 @@ return (
             key={target.id}
             onClick={() => setSelectedDetectiveTarget(target.id)}
             disabled={loading}
-            className={`w-full rounded-xl transition p-4 text-left ${
-              selectedDetectiveTarget === target.id
-                ? "bg-indigo-700 border-2 border-indigo-400"
-                : "bg-zinc-800 hover:bg-indigo-700"
-            }`}
+            className={`group w-full rounded-xl transition-all duration-200 transform p-4 text-left
+
+${
+selectedDetectiveTarget === target.id
+? "bg-indigo-700 border-2 border-indigo-400 scale-105 shadow-lg shadow-indigo-500/50"
+: "bg-zinc-800 hover:bg-indigo-700 hover:scale-105 hover:shadow-lg hover:shadow-indigo-500/40"
+}
+`}
           >
-            {target.nickname}
+            <div className="flex items-center justify-between">
+
+  <span>
+
+    {selectedDetectiveTarget === target.id && "🔎 "}
+
+    {target.nickname}
+
+  </span>
+
+  {selectedDetectiveTarget === target.id && (
+
+    <span className="text-2xl">
+      ✅
+    </span>
+
+  )}
+
+</div>
           </button>
 
         ))}
@@ -666,13 +764,34 @@ return (
             key={target.id}
             onClick={() => setSelectedSniperTarget(target.id)}
             disabled={loading}
-            className={`w-full rounded-xl transition p-4 text-left ${
-              selectedSniperTarget === target.id
-                ? "bg-orange-700 border-2 border-orange-400"
-                : "bg-zinc-800 hover:bg-orange-700"
-            }`}
+            className={`group w-full rounded-xl transition-all duration-200 transform p-4 text-left
+
+${
+selectedSniperTarget === target.id
+? "bg-orange-700 border-2 border-orange-400 scale-105 shadow-lg shadow-orange-500/50"
+: "bg-zinc-800 hover:bg-orange-700 hover:scale-105 hover:shadow-lg hover:shadow-orange-500/40"
+}
+`}
           >
-            {target.nickname}
+            <div className="flex items-center justify-between">
+
+  <span>
+
+    {selectedSniperTarget === target.id && "🎯 "}
+
+    {target.nickname}
+
+  </span>
+
+  {selectedSniperTarget === target.id && (
+
+    <span className="text-2xl">
+      ✅
+    </span>
+
+  )}
+
+</div>
           </button>
 
         ))}
@@ -749,6 +868,7 @@ player.role !== "sniper" && (
 )}
 
 {phase === "day" &&
+ dayVotingOpen &&
  player.alive &&
  player.canVote && (
 
@@ -774,13 +894,34 @@ player.role !== "sniper" && (
             onClick={() =>
               setSelectedVoteTarget(target.id)
             }
-            className={`w-full rounded-lg py-3 font-bold transition ${
-              selectedVoteTarget === target.id
-                ? "bg-red-700 border-2 border-red-400"
-                : "bg-zinc-700 hover:bg-red-600"
-            }`}
+            className={`group w-full rounded-xl p-4 text-left transition-all duration-200 transform
+
+${
+selectedVoteTarget === target.id
+? "bg-red-700 border-2 border-red-400 scale-105 shadow-lg shadow-red-500/50"
+: "bg-zinc-700 hover:bg-red-600 hover:scale-105 hover:shadow-lg hover:shadow-red-500/40"
+}
+`}
           >
-            {target.nickname}
+            <div className="flex items-center justify-between">
+
+  <span>
+
+    {selectedVoteTarget === target.id && "🗳️ "}
+
+    {target.nickname}
+
+  </span>
+
+  {selectedVoteTarget === target.id && (
+
+    <span className="text-2xl">
+      ✅
+    </span>
+
+  )}
+
+</div>
           </button>
 
         ))}
@@ -802,8 +943,9 @@ player.role !== "sniper" && (
 )}
 
 {phase === "day" &&
-  player.alive &&
-  !player.canVote && (
+ dayVotingOpen &&
+ player.alive &&
+ !player.canVote && (
     <div className="mt-8 rounded-xl border border-green-700 bg-zinc-800 p-6">
       <h3 className="text-3xl font-black text-yellow-400">
         ☀️ DAY

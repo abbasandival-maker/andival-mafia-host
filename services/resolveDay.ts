@@ -6,7 +6,7 @@ import {
 } from "firebase/firestore";
 
 import { db } from "@/lib/firebase";
-import { checkWinner } from "@/services/checkWinner";
+
 
 export async function resolveDay(gameId: string) {
   const playersRef = collection(db, "games", gameId, "players");
@@ -123,5 +123,6 @@ export async function resolveDay(gameId: string) {
 
   await batch.commit();
 
-  await checkWinner(gameId);
+// Host decides when the game ends.
+// No automatic winner detection.
 }

@@ -11,6 +11,10 @@ import { resolveNight } from "@/services/resolveNight";
 import { resolveDay } from "@/services/resolveDay";
 import { removePlayer } from "@/services/removePlayer";
 import { listenGame } from "@/services/listenGame";
+import {
+  listenMafiaChat,
+  MafiaMessage,
+} from "@/services/listenMafiaChat";
 import { openDayVoting } from "@/services/openDayVoting";
 import { countDayVotes } from "@/services/countDayVotes";
 import { finishDay } from "@/services/finishDay";
@@ -35,12 +39,20 @@ export default function HostPage({ params }: Props) {
 const [players, setPlayers] = useState<Player[]>([]);
 const [loading, setLoading] = useState(false);
 const [gameStatus, setGameStatus] = useState("waiting");
+const [phase, setPhase] = useState("");
+const [dayVotingOpen, setDayVotingOpen] = useState(false);
 const [voteResults, setVoteResults] = useState<
-  { playerId: string; votes: number }[]
+
+  {
+    playerId: string;
+    votes: number;
+    voters: string[];
+  }[]
 >([]);
 
 const [selectedElimination, setSelectedElimination] =
   useState<string | null>(null);
+  const [mafiaMessages, setMafiaMessages] = useState<MafiaMessage[]>([]);
   useEffect(() => {
     const unsubscribe = listenPlayers(gameId, (data) => {
       setPlayers(data as Player[]);
@@ -50,10 +62,22 @@ const [selectedElimination, setSelectedElimination] =
   }, [gameId]);
 useEffect(() => {
   const unsubscribe = listenGame(gameId, (game) => {
-    if (game?.status) {
-      setGameStatus(game.status);
+    if (!game) return;
+
+    setGameStatus(game.status ?? "");
+    setPhase(game.phase ?? "");
+    setDayVotingOpen(game.dayVotingOpen ?? false);
+});
+
+  return () => unsubscribe();
+}, [gameId]);
+useEffect(() => {
+  const unsubscribe = listenMafiaChat(
+    gameId,
+    (messages) => {
+      setMafiaMessages(messages);
     }
-  });
+  );
 
   return () => unsubscribe();
 }, [gameId]);
@@ -90,9 +114,6 @@ useEffect(() => {
     }
   }
 
-  // ============================
-  // Finish Night
-  // ============================
 
   // ============================
 // Finish Night
@@ -274,23 +295,49 @@ async function handleNoElimination() {
           <ArrowLeft size={20} />
           Home
         </Link>
+<div className="mt-8 mb-8 rounded-2xl border border-cyan-500/20 bg-gradient-to-r from-zinc-950 via-zinc-900 to-black p-6 shadow-2xl">
 
-        <div className="mt-8 flex flex-wrap items-center justify-between gap-6">
+  <h1 className="text-4xl font-black text-cyan-400 tracking-wider">
+    🎮 ANDIVAL COMMAND CENTER
+  </h1>
 
-          <div>
+  <div className="mt-5 flex flex-wrap gap-6">
 
-            <h1 className="text-4xl font-black">
-              Host Dashboard
-            </h1>
+    <div>
+      <p className="text-xs text-zinc-500">ROOM</p>
+      <p className="text-2xl font-black text-yellow-400">{gameId}</p>
+    </div>
 
-            <p className="mt-2 text-gray-400">
-              Room Code
-            </p>
+    <div>
+      <p className="text-xs text-zinc-500">PLAYERS</p>
+      <p className="text-2xl font-black text-green-400">{players.length}</p>
+    </div>
 
-            <h2 className="text-3xl font-bold text-yellow-400">
-              {gameId}
-            </h2>
+    <div>
+      <p className="text-xs text-zinc-500">STATUS</p>
+      <p className="text-2xl font-black text-cyan-400">
+        {phase.toUpperCase()}
+      </p>
+    </div>
 
+  </div>
+
+       
+<div className="mt-4">
+
+  {phase === "day" && (
+    <div className="rounded-lg bg-yellow-900 px-4 py-2 font-bold text-yellow-300">
+      ☀️ DAY
+    </div>
+  )}
+
+  {phase === "night" && (
+    <div className="rounded-lg bg-indigo-900 px-4 py-2 font-bold text-indigo-300">
+      🌙 NIGHT
+    </div>
+  )}
+
+</div>
           </div>
 
           <div className="rounded-xl border border-zinc-700 bg-zinc-900 px-6 py-4">
@@ -317,12 +364,12 @@ async function handleNoElimination() {
 
         </div>
 
-        <div className="mt-10 overflow-hidden rounded-xl border border-zinc-700 bg-zinc-900">
+        <div className="mt-10 overflow-hidden rounded-2xl border border-cyan-500/20 bg-gradient-to-b from-zinc-950 to-zinc-900 shadow-2xl">
 
           <div className="border-b border-zinc-700 p-5">
 
             <h3 className="text-xl font-bold">
-              Connected Players
+              👥 LIVE OPERATORS
             </h3>
 
           </div>
@@ -340,12 +387,12 @@ async function handleNoElimination() {
 
               <div
                 key={player.id}
-                className="flex items-center justify-between border-b border-zinc-800 p-4 last:border-b-0"
+                className="flex items-center justify-between border-b border-zinc-800 p-5 transition-all duration-300 hover:bg-zinc-800/60"
               >
 
                 <div className="flex items-center gap-3">
 
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-yellow-500 font-bold text-black">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-yellow-400 via-orange-400 to-red-500 font-black text-black shadow-lg shadow-yellow-500/30 transition-all duration-300 hover:scale-110">
 
                     {player.nickname?.charAt(0).toUpperCase()}
 
@@ -413,14 +460,30 @@ async function handleNoElimination() {
     </span>
   )}
 
-  {gameStatus === "waiting" && (
+  {gameStatus !== "finished" && (
     <button
       onClick={async () => {
-        if (!confirm(`Remove ${player.nickname}?`)) return;
 
-        await removePlayer(gameId, player.id);
-      }}
-      className="rounded-lg bg-red-600 px-3 py-2 text-white hover:bg-red-700 transition"
+  if (
+    !confirm(`Remove ${player.nickname} from the game?`)
+  ) {
+    return;
+  }
+
+  try {
+
+    await removePlayer(gameId, player.id);
+
+  } catch (error) {
+
+    console.error(error);
+
+    alert("Failed to remove player.");
+
+  }
+
+}}
+      className="rounded-xl bg-gradient-to-r from-red-600 to-red-700 px-4 py-2 font-bold text-white transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-red-500/40"
     >
       🗑 Remove
     </button>
@@ -441,7 +504,7 @@ async function handleNoElimination() {
 
         </div>
 
-        <div className="mt-8 space-y-4">
+        <div className="mt-8 grid gap-4 md:grid-cols-2">
 
    <Button
   onClick={handleStartGame}
@@ -451,13 +514,23 @@ async function handleNoElimination() {
   {loading ? "Starting..." : "▶ Start Game"}
 </Button>
 
+{phase === "night" && (
+
 <Button
-  onClick={handleFinishNight}
-  disabled={loading}
+    onClick={handleFinishNight}
+    disabled={loading}
 >
-  <Moon size={18} />
-  {loading ? "Processing..." : "🌙 Finish Night"}
+
+    <Moon size={18} />
+
+    {loading ? "Processing..." : "🌙 Finish Night"}
+
 </Button>
+
+)}
+
+{phase === "day" &&
+ !dayVotingOpen && (
 
 <Button
   onClick={handleOpenDayVoting}
@@ -466,33 +539,41 @@ async function handleNoElimination() {
   🗳 Open Day Voting
 </Button>
 
-<Button
-  onClick={handleFinishVoting}
-  disabled={loading}
->
-  ✅ Finish Voting
-</Button>
+)}
 
-<Button
-  onClick={handleFinishDay}
-  disabled={loading}
->
-  ☀️ Finish Day
-</Button>
+{phase === "day" &&
+ dayVotingOpen && (
+
+  <Button
+    onClick={handleFinishVoting}
+    disabled={loading}
+  >
+    ✅ Finish Voting
+  </Button>
+
+)}
+
+{phase === "day" &&
+ dayVotingOpen && (
+
+  <Button
+    onClick={handleFinishDay}
+    disabled={loading}
+  >
+    ☀️ Finish Day
+  </Button>
+
+)}
 
 {players.length < 6 && (
   <p className="text-sm text-gray-500">
     At least 6 players are required to start the game.
   </p>
 )}
-{players.length < 6 && (
-  <p className="text-sm text-gray-500">
-    At least 6 players are required to start the game.
-  </p>
-)}
+
 {voteResults.length > 0 && (
 
-  <div className="mt-10 rounded-xl border border-yellow-600 bg-zinc-900 p-6">
+  <div className="mt-10 rounded-2xl border border-yellow-500/40 bg-gradient-to-b from-zinc-950 to-zinc-900 p-6 shadow-2xl">
 
     <h2 className="text-2xl font-black text-yellow-400 mb-6">
       🗳 Voting Results
@@ -509,56 +590,63 @@ async function handleNoElimination() {
         return (
           <div
             key={result.playerId}
-            className="flex items-center justify-between rounded-lg bg-zinc-800 p-4"
+            className="flex items-center justify-between rounded-xl border border-zinc-700 bg-zinc-800 p-4 transition-all duration-300 hover:scale-[1.02] hover:border-yellow-500 hover:bg-zinc-700"
           >
             <span className="font-bold">
               {player?.nickname ?? result.playerId}
             </span>
 
-            <span className="text-red-400 font-black">
-              {result.votes} Votes
-            </span>
+            <button
+  onClick={() =>
+    alert(
+      `Votes for ${player?.nickname}\n\n${result.voters.join("\n")}`
+    )
+  }
+  className="rounded-lg bg-red-900 px-3 py-2 font-black text-red-300 transition-all duration-300 hover:scale-105 hover:bg-red-700"
+>
+  {result.votes} Votes 👁
+</button>
           </div>
         );
       })}
 
     </div>
 
-    {selectedElimination && (
+   {selectedElimination && (
 
-      <div className="mt-8 rounded-xl bg-yellow-950 border border-yellow-600 p-5">
+  <div className="mt-8 rounded-xl border border-yellow-600 bg-yellow-950 p-5">
 
-        <p className="text-gray-400">
-          Selected Player
-        </p>
+    <p className="text-gray-400">
+      Selected Player
+    </p>
 
-        <h3 className="text-3xl font-black text-yellow-400">
+    <h3 className="text-3xl font-black text-yellow-400">
+      {
+        players.find(
+          (p) => p.id === selectedElimination
+        )?.nickname
+      }
+    </h3>
 
-          {
-            players.find(
-              (p) => p.id === selectedElimination
-            )?.nickname
-          }
-<div className="mt-8 flex gap-4">
+    <div className="mt-8 flex gap-4">
 
-  <button
-    onClick={handleEliminatePlayer}
-    className="flex-1 rounded-lg bg-red-600 py-3 font-bold hover:bg-red-700"
-  >
-    🗑 Eliminate
-  </button>
+      <button
+        onClick={handleEliminatePlayer}
+        className="flex-1 rounded-lg bg-red-600 py-3 font-bold hover:bg-red-700"
+      >
+        🗑 Eliminate
+      </button>
 
-  <button
-    onClick={handleNoElimination}
-    className="flex-1 rounded-lg bg-gray-700 py-3 font-bold hover:bg-gray-600"
-  >
-    ❌ No Elimination
-  </button>
+      <button
+        onClick={handleNoElimination}
+        className="flex-1 rounded-lg bg-gray-700 py-3 font-bold hover:bg-gray-600"
+      >
+        ❌ No Elimination
+      </button>
 
-</div>
-        </h3>
+    </div>
 
-      </div>
+  </div>
 
     )}
 
@@ -566,9 +654,95 @@ async function handleNoElimination() {
 
 )}
       </div> {/* mt-8 space-y-4 */}
+<div className="mt-10 rounded-2xl border border-cyan-500/20 bg-gradient-to-b from-zinc-950 to-black p-6 shadow-2xl">
 
-    </div> {/* این div مربوط به mx-auto max-w-5xl است */}
+  <h2 className="text-2xl font-black text-cyan-400 tracking-widest">
+    ⚡ SYSTEM STATUS
+  </h2>
 
-  </main>
+  <div className="mt-6 grid grid-cols-2 gap-6">
+
+    <div>
+      <p className="text-xs text-zinc-500">GAME STATUS</p>
+      <p className="text-xl font-black text-green-400">
+        {gameStatus.toUpperCase()}
+      </p>
+    </div>
+
+    <div>
+      <p className="text-xs text-zinc-500">PHASE</p>
+      <p className="text-xl font-black text-yellow-400">
+        {phase.toUpperCase()}
+      </p>
+    </div>
+
+    <div>
+      <p className="text-xs text-zinc-500">PLAYERS</p>
+      <p className="text-xl font-black text-cyan-400">
+        {players.length}
+      </p>
+    </div>
+
+    <div>
+      <p className="text-xs text-zinc-500">SERVER</p>
+      <p className="text-xl font-black text-red-400">
+        ● ONLINE
+      </p>
+    </div>
+
+  </div>
+
+</div>
+<div className="mt-10 rounded-2xl border border-red-500/20 bg-gradient-to-b from-black to-zinc-950 p-6 shadow-2xl">
+
+  <div className="mb-6 flex items-center justify-between">
+
+    <h2 className="text-2xl font-black tracking-widest text-red-400">
+      💬 MAFIA CHANNEL
+    </h2>
+
+    <span className="rounded-full bg-red-900 px-3 py-1 text-xs font-bold text-red-300">
+      🔴 LIVE
+    </span>
+
+  </div>
+
+  {mafiaMessages.length === 0 ? (
+
+    <p className="text-zinc-500">
+      No mafia messages...
+    </p>
+
+  ) : (
+
+    <div className="space-y-3">
+
+      {mafiaMessages.map((msg) => (
+
+        <div
+          key={msg.id}
+          className="rounded-xl border border-zinc-800 bg-zinc-900 p-4"
+        >
+
+          <p className="font-bold text-red-400">
+            {msg.senderName}
+          </p>
+
+          <p className="mt-2 text-zinc-200">
+            {msg.message}
+          </p>
+
+        </div>
+
+      ))}
+
+    </div>
+
+ )}
+
+</div> {/* Mafia Channel */}
+
+
+</main>
 );
 }

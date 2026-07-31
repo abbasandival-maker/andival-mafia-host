@@ -7,7 +7,7 @@ import {
 } from "firebase/firestore";
 
 import { db } from "@/lib/firebase";
-import { checkWinner } from "@/services/checkWinner";
+
 
 export async function resolveNight(gameId: string) {
   const playersSnapshot = await getDocs(
@@ -326,5 +326,6 @@ detectiveSnapshot.forEach((d) => {
 
   await batch.commit();
 
-  await checkWinner(gameId);
+// Host decides when the game ends.
+// No automatic winner detection.
 }

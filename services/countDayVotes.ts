@@ -8,6 +8,7 @@ import { db } from "@/lib/firebase";
 export type VoteResult = {
   playerId: string;
   votes: number;
+  voters: string[];
 };
 
 export async function countDayVotes(
@@ -21,23 +22,60 @@ export async function countDayVotes(
     "dayVotes"
   );
 
-  const snapshot = await getDocs(votesRef);
+  const playersRef = collection(
+    db,
+    "games",
+    gameId,
+    "players"
+  );
 
-  const counter: Record<string, number> = {};
+  const [votesSnap, playersSnap] =
+    await Promise.all([
+      getDocs(votesRef),
+      getDocs(playersRef),
+    ]);
 
-  snapshot.forEach((doc) => {
+  const playerNames: Record<string, string> = {};
+
+  playersSnap.forEach((doc) => {
+    const data = doc.data();
+
+    playerNames[doc.id] =
+      data.nickname ?? doc.id;
+  });
+
+  const counter: Record<
+    string,
+    VoteResult
+  > = {};
+
+  votesSnap.forEach((doc) => {
+
     const data = doc.data();
 
     if (!data.targetId) return;
 
-    counter[data.targetId] =
-      (counter[data.targetId] || 0) + 1;
+    if (!counter[data.targetId]) {
+
+      counter[data.targetId] = {
+        playerId: data.targetId,
+        votes: 0,
+        voters: [],
+      };
+
+    }
+
+    counter[data.targetId].votes++;
+
+    counter[data.targetId].voters.push(
+      playerNames[data.playerId] ??
+      data.playerId
+    );
+
   });
 
-  return Object.entries(counter)
-    .map(([playerId, votes]) => ({
-      playerId,
-      votes,
-    }))
-    .sort((a, b) => b.votes - a.votes);
+  return Object.values(counter).sort(
+    (a, b) => b.votes - a.votes
+  );
+
 }
