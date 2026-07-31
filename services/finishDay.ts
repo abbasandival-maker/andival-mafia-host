@@ -12,7 +12,6 @@ export async function finishDay(
   gameId: string,
   eliminatedPlayerId: string | null
 ) {
-
   const playersRef = collection(
     db,
     "games",
@@ -52,18 +51,15 @@ export async function finishDay(
 
   });
 
+  // پاک کردن رأی‌های روز
   votesSnap.forEach((voteDoc) => {
     batch.delete(voteDoc.ref);
   });
 
-  batch.update(
-    doc(db, "games", gameId),
-    {
-      phase: "night",
-    }
-  );
+  // ❌ دیگر فاز را به Night تغییر نده
 
   await batch.commit();
 
+  // بررسی برنده
   await checkWinner(gameId);
 }
