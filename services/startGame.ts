@@ -77,11 +77,18 @@ export async function startGame(gameId: string) {
   await updateDoc(
     doc(db, "games", gameId),
     {
-      status: "playing",
-      phase: "night",
-      currentDay: 1,
-      startedAt: serverTimestamp(),
-    }
+  status: "playing",
+
+  // بازی از روز شروع می‌شود
+  phase: "day",
+
+  currentDay: 1,
+
+  // رأی‌گیری در شروع بازی بسته است
+  dayVotingOpen: false,
+
+  startedAt: serverTimestamp(),
+}
   );
 
   console.log("Game Started:", gameId);
