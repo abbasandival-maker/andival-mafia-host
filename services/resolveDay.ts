@@ -118,8 +118,12 @@ export async function resolveDay(gameId: string) {
 
   // Start Night
   batch.update(doc(db, "games", gameId), {
-    phase: "night",
-  });
+  // ورود به شب
+  phase: "night",
+
+  // بستن رأی‌گیری روز
+  dayVotingOpen: false,
+});
 
   await batch.commit();
 

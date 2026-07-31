@@ -320,9 +320,14 @@ detectiveSnapshot.forEach((d) => {
   //------------------------------------------------
 
   batch.update(doc(db, "games", gameId), {
-    phase: "day",
-    currentDay: increment(1),
-  });
+  // شروع روز
+  phase: "day",
+
+  // در شروع روز هنوز رأی‌گیری باز نیست
+  dayVotingOpen: false,
+
+  currentDay: increment(1),
+});
 
   await batch.commit();
 

@@ -6,5 +6,8 @@ export async function openDayVoting(gameId: string) {
 
   await updateDoc(gameRef, {
     phase: "day",
+
+    // رأی‌گیری روز فعال شود
+    dayVotingOpen: true,
   });
 }

@@ -331,7 +331,7 @@ async function handleNoElimination() {
     </div>
   )}
 
-  {phase === "night" && (
+  {true && (
     <div className="rounded-lg bg-indigo-900 px-4 py-2 font-bold text-indigo-300">
       🌙 NIGHT
     </div>
@@ -514,7 +514,7 @@ async function handleNoElimination() {
   {loading ? "Starting..." : "▶ Start Game"}
 </Button>
 
-{phase === "night" && (
+{true && (
 
 <Button
     onClick={handleFinishNight}
@@ -529,8 +529,8 @@ async function handleNoElimination() {
 
 )}
 
-{phase === "day" &&
- !dayVotingOpen && (
+{true && (
+
 
 <Button
   onClick={handleOpenDayVoting}
@@ -541,8 +541,7 @@ async function handleNoElimination() {
 
 )}
 
-{phase === "day" &&
- dayVotingOpen && (
+{true && (
 
   <Button
     onClick={handleFinishVoting}
@@ -553,8 +552,7 @@ async function handleNoElimination() {
 
 )}
 
-{phase === "day" &&
- dayVotingOpen && (
+{true && (
 
   <Button
     onClick={handleFinishDay}
