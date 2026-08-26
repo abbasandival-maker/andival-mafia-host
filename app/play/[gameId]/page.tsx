@@ -10,7 +10,7 @@ import { mafiaVote } from "@/services/mafiaVote";
 import { doctorSave } from "@/services/doctorSave";
 import { detectiveCheck } from "@/services/detectiveCheck";
 import { sniperShoot } from "@/services/sniperShoot";
-import { dayVote } from "@/services/dayVote";
+import { dayVote, secondVote, type SecondVoteChoice } from "@/services/dayVote";
 import { sendMafiaMessage } from "@/services/sendMafiaMessage";
 import { listenMafiaChat } from "@/services/listenMafiaChat";
   
@@ -36,6 +36,8 @@ type Player = {
 
   investigationResult?: string;
   investigatedPlayer?: string;
+
+  secondVoteChoice?: SecondVoteChoice | null;
 };
 
 export default function PlayPage({ params }: Props) {
@@ -45,10 +47,14 @@ export default function PlayPage({ params }: Props) {
   const [players, setPlayers] = useState<Player[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const [phase, setPhase] = useState<"night" | "day">("night");
+  const [phase, setPhase] = useState<"night" | "day" | "second_vote">("night");
   const [gameStatus, setGameStatus] = useState("");
   const [winner, setWinner] = useState("");
 const [dayVotingOpen, setDayVotingOpen] = useState(false);
+  const [secondVoteTargetId, setSecondVoteTargetId] = useState<string | null>(null);
+  const [secondVoteSubmitted, setSecondVoteSubmitted] = useState(false);
+  const [selectedSecondVote, setSelectedSecondVote] =
+    useState<SecondVoteChoice | null>(null);
 
   const [selectedTarget, setSelectedTarget] =
     useState<string | null>(null);
@@ -96,6 +102,12 @@ const [chatInput, setChatInput] = useState("");
 setGameStatus(game.status ?? "");
 setWinner(game.winner ?? "");
 setDayVotingOpen(game.dayVotingOpen ?? false);
+      setSecondVoteTargetId(game.secondVoteTargetId ?? null);
+
+      if (game.phase !== "second_vote") {
+        setSecondVoteSubmitted(false);
+        setSelectedSecondVote(null);
+      }
     });
 
     return () => unsubscribe();
@@ -275,6 +287,40 @@ async function handleDayVote(targetId: string) {
 
   setLoading(false);
 }
+
+async function handleSecondVote(choice: SecondVoteChoice) {
+  const playerId = localStorage.getItem("playerId");
+
+  if (!playerId || !player) return;
+  if (!player.alive) { alert("Dead players cannot vote."); return; }
+  if (secondVoteSubmitted || loading) return;
+
+  setLoading(true);
+  try {
+    await secondVote(gameId, playerId, choice);
+    setSelectedSecondVote(choice);
+    setSecondVoteSubmitted(true);
+    alert(choice === "YES" ? "YES vote submitted" : "NO vote submitted");
+  } catch (error) {
+    console.error(error);
+    const message = error instanceof Error ? error.message : "";
+    if (message === "SECOND_VOTE_ALREADY_USED") {
+      setSecondVoteSubmitted(true);
+      alert("You have already voted.");
+    } else if (message === "DEAD_PLAYER_CANNOT_VOTE") {
+      alert("Dead players cannot vote.");
+    } else if (message === "SECOND_VOTE_NOT_OPEN") {
+      alert("Second vote is not open.");
+    } else {
+      alert("Failed to submit vote.");
+    }
+  } finally {
+    setLoading(false);
+  }
+}
+
+const secondVoteTarget =
+  players.find((p) => p.id === secondVoteTargetId) ?? null;
 
 if (gameStatus === "finished") {
   return (
@@ -865,6 +911,39 @@ player.role !== "sniper" && (
 
   </div>
 
+)}
+
+{/* ========================= */}
+{/* SECOND VOTE - YES / NO */}
+{/* ========================= */}
+{phase === "second_vote" && player.alive && secondVoteTarget && (
+  <div className="mt-8 rounded-2xl border border-yellow-500 bg-zinc-950 p-6 shadow-2xl">
+    <div className="text-center">
+      <p className="text-sm font-bold uppercase tracking-[0.25em] text-yellow-400">Second Vote</p>
+      <h3 className="mt-3 text-2xl font-black">Final vote for</h3>
+      <p className="mt-2 text-4xl font-black text-yellow-400">{secondVoteTarget.nickname}</p>
+      <p className="mt-4 text-zinc-400">Do you vote to eliminate this player?</p>
+    </div>
+    {!secondVoteSubmitted ? (
+      <div className="mt-8 grid grid-cols-2 gap-4">
+        <button disabled={loading} onClick={() => handleSecondVote("YES")} className="rounded-2xl border-2 border-green-700 bg-green-950 p-6 text-2xl font-black text-green-300 transition-all hover:scale-[1.02] hover:bg-green-900 disabled:opacity-40">YES<span className="mt-2 block text-sm font-medium">Eliminate</span></button>
+        <button disabled={loading} onClick={() => handleSecondVote("NO")} className="rounded-2xl border-2 border-red-700 bg-red-950 p-6 text-2xl font-black text-red-300 transition-all hover:scale-[1.02] hover:bg-red-900 disabled:opacity-40">NO<span className="mt-2 block text-sm font-medium">Keep in game</span></button>
+      </div>
+    ) : (
+      <div className="mt-8 rounded-xl border border-green-700 bg-green-950/60 p-5 text-center">
+        <h4 className="text-xl font-black text-green-300">✓ Vote Submitted</h4>
+        <p className="mt-2 text-zinc-300">Your vote: <span className="font-black text-white">{selectedSecondVote ?? "SUBMITTED"}</span></p>
+        <p className="mt-2 text-sm text-zinc-400">Waiting for the host's final decision...</p>
+      </div>
+    )}
+  </div>
+)}
+
+{phase === "second_vote" && !player.alive && (
+  <div className="mt-8 rounded-xl border border-zinc-700 bg-zinc-900 p-6 text-center">
+    <h3 className="text-xl font-bold">You are eliminated</h3>
+    <p className="mt-2 text-zinc-400">Dead players cannot participate in the second vote.</p>
+  </div>
 )}
 
 {phase === "day" &&
