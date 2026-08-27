@@ -86,17 +86,19 @@ export async function POST(request: Request) {
 
     return response;
   } catch (error) {
-    console.error(
-      "HOST LOGIN ERROR:",
-      error
-    );
+  console.error("HOST LOGIN ERROR:", error);
 
-    return NextResponse.json(
-      {
-        success: false,
-        error: "Login failed",
-      },
-      { status: 500 }
+  const message =
+    error instanceof Error
+      ? error.message
+      : "Unknown server error";
+
+  return NextResponse.json(
+    {
+      success: false,
+      error: message,
+    },
+    { status: 500 }
     );
   }
 }
