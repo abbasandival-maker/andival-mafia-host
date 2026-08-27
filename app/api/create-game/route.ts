@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createHmac, timingSafeEqual } from "crypto";
 
-import { adminDb } from "@/lib/firebaseAdmin";
+import { getAdminDb } from "@/lib/firebaseAdmin";
 
 export const runtime = "nodejs";
 
@@ -65,6 +65,9 @@ export async function POST(
         { status: 401 }
       );
     }
+
+    // Firebase Admin فقط هنگام اجرای API ساخته می‌شود
+    const adminDb = getAdminDb();
 
     const body = await request.json();
 

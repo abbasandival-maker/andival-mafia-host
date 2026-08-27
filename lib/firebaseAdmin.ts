@@ -15,27 +15,26 @@ function getFirebaseAdminApp(): App {
   }
 
   const projectId =
-    process.env.FIREBASE_ADMIN_PROJECT_ID?.trim();
+    process.env.FIREBASE_ADMIN_PROJECT_ID;
 
   const clientEmail =
-    process.env.FIREBASE_ADMIN_CLIENT_EMAIL?.trim();
+    process.env.FIREBASE_ADMIN_CLIENT_EMAIL;
 
-  const rawPrivateKey =
-    process.env.FIREBASE_ADMIN_PRIVATE_KEY;
+  const privateKey =
+    process.env.FIREBASE_ADMIN_PRIVATE_KEY?.replace(
+      /\\n/g,
+      "\n"
+    );
 
   if (
     !projectId ||
     !clientEmail ||
-    !rawPrivateKey
+    !privateKey
   ) {
     throw new Error(
       "Firebase Admin environment variables are missing"
     );
   }
-
-  const privateKey = rawPrivateKey
-    .replace(/\\n/g, "\n")
-    .trim();
 
   return initializeApp({
     credential: cert({
@@ -46,6 +45,8 @@ function getFirebaseAdminApp(): App {
   });
 }
 
-const adminApp = getFirebaseAdminApp();
+export function getAdminDb() {
+  const adminApp = getFirebaseAdminApp();
 
-export const adminDb = getFirestore(adminApp);
+  return getFirestore(adminApp);
+}
