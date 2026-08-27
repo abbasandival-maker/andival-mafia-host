@@ -7,27 +7,45 @@ import {
   type App,
 } from "firebase-admin/app";
 
-import {
-  getFirestore,
-} from "firebase-admin/firestore";
-
-import serviceAccount from "../firebase-service-account.json";
+import { getFirestore } from "firebase-admin/firestore";
 
 function getFirebaseAdminApp(): App {
   if (getApps().length > 0) {
     return getApps()[0]!;
   }
 
+  const projectId =
+    process.env.FIREBASE_ADMIN_PROJECT_ID?.trim();
+
+  const clientEmail =
+    process.env.FIREBASE_ADMIN_CLIENT_EMAIL?.trim();
+
+  const rawPrivateKey =
+    process.env.FIREBASE_ADMIN_PRIVATE_KEY;
+
+  if (
+    !projectId ||
+    !clientEmail ||
+    !rawPrivateKey
+  ) {
+    throw new Error(
+      "Firebase Admin environment variables are missing"
+    );
+  }
+
+  const privateKey = rawPrivateKey
+    .replace(/\\n/g, "\n")
+    .trim();
+
   return initializeApp({
     credential: cert({
-      projectId: serviceAccount.project_id,
-      clientEmail: serviceAccount.client_email,
-      privateKey: serviceAccount.private_key,
+      projectId,
+      clientEmail,
+      privateKey,
     }),
   });
 }
 
 const adminApp = getFirebaseAdminApp();
 
-export const adminDb =
-  getFirestore(adminApp);
+export const adminDb = getFirestore(adminApp);
