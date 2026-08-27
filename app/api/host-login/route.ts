@@ -6,7 +6,7 @@ export const runtime = "nodejs";
 const COOKIE_NAME = "andival_host_session";
 
 function createSessionToken() {
-  const secret = process.env.HOST_SESSION_SECRET;
+  const secret = process.env.HOST_SESSION_SECRET?.trim();
 
   if (!secret) {
     throw new Error("HOST_SESSION_SECRET is missing");
@@ -23,17 +23,22 @@ export async function POST(request: Request) {
 
     const password =
       typeof body?.password === "string"
-        ? body.password
+        ? body.password.trim()
         : "";
 
     const hostPassword =
-      process.env.HOST_PASSWORD;
+      process.env.HOST_PASSWORD?.trim();
 
     if (!hostPassword) {
+      console.error(
+        "HOST_PASSWORD is missing from the server environment"
+      );
+
       return NextResponse.json(
         {
           success: false,
-          error: "Host password is not configured",
+          error:
+            "Server configuration error: HOST_PASSWORD is missing",
         },
         { status: 500 }
       );
