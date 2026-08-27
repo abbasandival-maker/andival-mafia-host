@@ -15,24 +15,48 @@ function getFirebaseAdminApp(): App {
   }
 
   const projectId =
-    process.env.FIREBASE_ADMIN_PROJECT_ID;
+    process.env.FIREBASE_ADMIN_PROJECT_ID?.trim();
 
   const clientEmail =
-    process.env.FIREBASE_ADMIN_CLIENT_EMAIL;
+    process.env.FIREBASE_ADMIN_CLIENT_EMAIL?.trim();
 
-  const privateKey =
-    process.env.FIREBASE_ADMIN_PRIVATE_KEY?.replace(
-      /\\n/g,
-      "\n"
+  const rawPrivateKey =
+    process.env.FIREBASE_ADMIN_PRIVATE_KEY;
+
+  const privateKey = rawPrivateKey
+    ?.replace(/\\n/g, "\n")
+    .trim();
+
+  const missing: string[] = [];
+
+  if (!projectId) {
+    missing.push("FIREBASE_ADMIN_PROJECT_ID");
+  }
+
+  if (!clientEmail) {
+    missing.push("FIREBASE_ADMIN_CLIENT_EMAIL");
+  }
+
+  if (!privateKey) {
+    missing.push("FIREBASE_ADMIN_PRIVATE_KEY");
+  }
+
+  if (missing.length > 0) {
+    throw new Error(
+      `Firebase Admin missing environment variables: ${missing.join(", ")}`
     );
+  }
 
   if (
-    !projectId ||
-    !clientEmail ||
-    !privateKey
+    !privateKey.includes(
+      "-----BEGIN PRIVATE KEY-----"
+    ) ||
+    !privateKey.includes(
+      "-----END PRIVATE KEY-----"
+    )
   ) {
     throw new Error(
-      "Firebase Admin environment variables are missing"
+      "Firebase Admin private key format is invalid"
     );
   }
 
