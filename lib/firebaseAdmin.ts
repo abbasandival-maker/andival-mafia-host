@@ -24,8 +24,8 @@ function getFirebaseAdminApp(): App {
     process.env.FIREBASE_ADMIN_PRIVATE_KEY;
 
   const privateKey = rawPrivateKey
-    ?.replace(/\\n/g, "\n")
-    .trim();
+    ? rawPrivateKey.replace(/\\n/g, "\n").trim()
+    : "";
 
   const missing: string[] = [];
 
@@ -48,12 +48,8 @@ function getFirebaseAdminApp(): App {
   }
 
   if (
-    !privateKey.includes(
-      "-----BEGIN PRIVATE KEY-----"
-    ) ||
-    !privateKey.includes(
-      "-----END PRIVATE KEY-----"
-    )
+    !privateKey.includes("-----BEGIN PRIVATE KEY-----") ||
+    !privateKey.includes("-----END PRIVATE KEY-----")
   ) {
     throw new Error(
       "Firebase Admin private key format is invalid"
@@ -71,6 +67,5 @@ function getFirebaseAdminApp(): App {
 
 export function getAdminDb() {
   const adminApp = getFirebaseAdminApp();
-
   return getFirestore(adminApp);
 }
