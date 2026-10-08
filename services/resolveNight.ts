@@ -1,44 +1,24 @@
-import {
-  collection,
-  getDocs,
-  doc,
-  writeBatch,
-  increment,
-} from "firebase/firestore";
-
+import { collection, getDocs, doc, writeBatch, increment } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
+const isMafiaRole = (role: string) =>
+  role === "godfather" || role === "savval_goodman" || role === "mafia";
+
 export async function resolveNight(gameId: string) {
-  const playersSnapshot = await getDocs(
-    collection(db, "games", gameId, "players")
-  );
+  const playersSnapshot = await getDocs(collection(db, "games", gameId, "players"));
+  const players = playersSnapshot.docs.map((d) => ({ id: d.id, ...d.data() })) as any[];
 
-  const players = playersSnapshot.docs.map((d) => ({
-    id: d.id,
-    ...d.data(),
-  })) as any[];
-
-  const mafiaVotesSnapshot = await getDocs(
-    collection(db, "games", gameId, "mafiaVotes")
-  );
-
-  const doctorSnapshot = await getDocs(
-    collection(db, "games", gameId, "doctorActions")
-  );
-
-  const sniperSnapshot = await getDocs(
-    collection(db, "games", gameId, "sniperActions")
-  );
-
-  const detectiveSnapshot = await getDocs(
-    collection(db, "games", gameId, "detectiveActions")
-  );
+  const [mafiaVotesSnapshot, doctorSnapshot, sniperSnapshot, detectiveSnapshot, slaughterSnapshot, purchaseSnapshot] =
+    await Promise.all([
+      getDocs(collection(db, "games", gameId, "mafiaVotes")),
+      getDocs(collection(db, "games", gameId, "doctorActions")),
+      getDocs(collection(db, "games", gameId, "sniperActions")),
+      getDocs(collection(db, "games", gameId, "detectiveActions")),
+      getDocs(collection(db, "games", gameId, "slaughterActions")),
+      getDocs(collection(db, "games", gameId, "purchaseActions")),
+    ]);
 
   const batch = writeBatch(db);
-
-  // ================================================
-  // MAFIA / GODFATHER ACTION
-  // ================================================
 
   let mafiaTarget: string | null = null;
   let mafiaTargetName = "";
@@ -47,59 +27,27 @@ export async function resolveNight(gameId: string) {
 
   mafiaVotesSnapshot.forEach((voteDoc) => {
     const data = voteDoc.data();
-
     mafiaTarget = data.targetId ?? null;
-
-    const voterId =
-      data.godfatherId ??
-      data.playerId ??
-      voteDoc.id;
-
-    const voter = players.find(
-      (player) => player.id === voterId
-    );
-
+    const voterId = data.godfatherId ?? data.playerId ?? voteDoc.id;
+    const voter = players.find((p) => p.id === voterId);
     if (voter?.role === "godfather") {
       godfatherId = voter.id;
-      godfatherName =
-        voter.nickname ??
-        voter.name ??
-        "";
+      godfatherName = voter.nickname ?? voter.name ?? "";
     }
   });
 
   if (mafiaTarget) {
-    const target = players.find(
-      (player) => player.id === mafiaTarget
-    );
-
-    mafiaTargetName =
-      target?.nickname ??
-      target?.name ??
-      "";
+    const target = players.find((p) => p.id === mafiaTarget);
+    mafiaTargetName = target?.nickname ?? target?.name ?? "";
   }
 
-  // اگر در سند رأی ID پدرخوانده نبود،
-  // خود پدرخوانده زنده را پیدا کن.
   if (!godfatherId) {
-    const godfather = players.find(
-      (player) =>
-        player.role === "godfather" &&
-        player.alive
-    );
-
+    const godfather = players.find((p) => p.role === "godfather" && p.alive);
     if (godfather) {
       godfatherId = godfather.id;
-      godfatherName =
-        godfather.nickname ??
-        godfather.name ??
-        "";
+      godfatherName = godfather.nickname ?? godfather.name ?? "";
     }
   }
-
-  // ================================================
-  // DOCTOR ACTION
-  // ================================================
 
   let doctorSave: string | null = null;
   let doctorId: string | null = null;
@@ -108,36 +56,13 @@ export async function resolveNight(gameId: string) {
 
   doctorSnapshot.forEach((actionDoc) => {
     const data = actionDoc.data();
-
-    doctorId =
-      data.doctorId ??
-      actionDoc.id;
-
-    doctorSave =
-      data.targetId ?? null;
-
-    const doctor = players.find(
-      (player) => player.id === doctorId
-    );
-
-    const target = players.find(
-      (player) => player.id === doctorSave
-    );
-
-    doctorName =
-      doctor?.nickname ??
-      doctor?.name ??
-      "";
-
-    doctorSaveName =
-      target?.nickname ??
-      target?.name ??
-      "";
+    doctorId = data.doctorId ?? actionDoc.id;
+    doctorSave = data.targetId ?? null;
+    const doctor = players.find((p) => p.id === doctorId);
+    const target = players.find((p) => p.id === doctorSave);
+    doctorName = doctor?.nickname ?? doctor?.name ?? "";
+    doctorSaveName = target?.nickname ?? target?.name ?? "";
   });
-
-  // ================================================
-  // SNIPER ACTION
-  // ================================================
 
   let sniperTarget: string | null = null;
   let sniperTargetName = "";
@@ -146,36 +71,13 @@ export async function resolveNight(gameId: string) {
 
   sniperSnapshot.forEach((actionDoc) => {
     const data = actionDoc.data();
-
-    sniperId =
-      data.sniperId ??
-      actionDoc.id;
-
-    sniperTarget =
-      data.targetId ?? null;
-
-    const sniper = players.find(
-      (player) => player.id === sniperId
-    );
-
-    const target = players.find(
-      (player) => player.id === sniperTarget
-    );
-
-    sniperName =
-      sniper?.nickname ??
-      sniper?.name ??
-      "";
-
-    sniperTargetName =
-      target?.nickname ??
-      target?.name ??
-      "";
+    sniperId = data.sniperId ?? actionDoc.id;
+    sniperTarget = data.targetId ?? null;
+    const sniper = players.find((p) => p.id === sniperId);
+    const target = players.find((p) => p.id === sniperTarget);
+    sniperName = sniper?.nickname ?? sniper?.name ?? "";
+    sniperTargetName = target?.nickname ?? target?.name ?? "";
   });
-
-  // ================================================
-  // DETECTIVE ACTION
-  // ================================================
 
   let detectiveId: string | null = null;
   let detectiveName = "";
@@ -185,313 +87,217 @@ export async function resolveNight(gameId: string) {
 
   detectiveSnapshot.forEach((actionDoc) => {
     const data = actionDoc.data();
-
-    detectiveId =
-      data.detectiveId ??
-      actionDoc.id;
-
-    detectiveTargetId =
-      data.targetId ?? null;
-
-    const detective = players.find(
-      (player) => player.id === detectiveId
-    );
-
-    const target = players.find(
-      (player) =>
-        player.id === detectiveTargetId
-    );
-
-    detectiveName =
-      detective?.nickname ??
-      detective?.name ??
-      "";
-
-    detectiveTargetName =
-      target?.nickname ??
-      target?.name ??
-      "";
-
-    let result = "NOT_MAFIA";
-
-    if (target?.role === "mafia") {
-      result = "MAFIA";
-    }
-
-    // طبق قانون فعلی:
-    // پدرخوانده برای کارآگاه مافیا دیده نمی‌شود.
-    if (target?.role === "godfather") {
-      result = "NOT_MAFIA";
-    }
-
-    detectiveResult = result;
+    detectiveId = data.detectiveId ?? actionDoc.id;
+    detectiveTargetId = data.targetId ?? null;
+    const detective = players.find((p) => p.id === detectiveId);
+    const target = players.find((p) => p.id === detectiveTargetId);
+    detectiveName = detective?.nickname ?? detective?.name ?? "";
+    detectiveTargetName = target?.nickname ?? target?.name ?? "";
+    detectiveResult = target && isMafiaRole(target.role) ? "MAFIA" : "NOT_MAFIA";
 
     if (detectiveId) {
-      batch.update(
-        doc(
-          db,
-          "games",
-          gameId,
-          "players",
-          detectiveId
-        ),
-        {
-          investigatedPlayer:
-            detectiveTargetName,
-          investigationResult:
-            detectiveResult,
-          canUseAbility: false,
-        }
-      );
+      batch.update(doc(db, "games", gameId, "players", detectiveId), {
+        investigatedPlayer: detectiveTargetName,
+        investigationResult: detectiveResult,
+        canUseAbility: false,
+      });
     }
   });
 
-  // ================================================
-  // NIGHT RESULT
-  // ================================================
-
   const deadPlayers = new Set<string>();
 
-  // --------------------------------
-  // MAFIA KILL
-  // --------------------------------
+  // -------------------------------
+  // SLAUGHTER — resolves first and cannot be saved by Doctor
+  // -------------------------------
+  let slaughterTarget = "";
+  let slaughterTargetName = "";
+  let slaughterGuessedRole = "";
+  let slaughterCorrect = false;
+  let slaughterKilledPlayer = "";
 
-  let mafiaKilledPlayer = "";
+  slaughterSnapshot.forEach((actionDoc) => {
+    const data = actionDoc.data();
+    slaughterTarget = data.targetId ?? "";
+    slaughterGuessedRole = data.guessedRole ?? "";
+    slaughterCorrect = data.correct === true;
+  });
 
-  if (
-    mafiaTarget &&
-    mafiaTarget !== doctorSave
-  ) {
-    const target = players.find(
-      (player) => player.id === mafiaTarget
-    );
+  if (slaughterTarget && slaughterCorrect) {
+    const target = players.find((p) => p.id === slaughterTarget);
+    if (target?.alive) {
+      deadPlayers.add(slaughterTarget);
+      slaughterTargetName = target.nickname ?? target.name ?? "";
+      slaughterKilledPlayer = slaughterTargetName;
+      batch.update(doc(db, "games", gameId, "players", slaughterTarget), {
+        alive: false,
+        eliminated: true,
+      });
+      batch.update(doc(db, "games", gameId), { alivePlayers: increment(-1) });
+    }
+  } else if (slaughterTarget) {
+    const target = players.find((p) => p.id === slaughterTarget);
+    slaughterTargetName = target?.nickname ?? target?.name ?? "";
+  }
 
-    if (
-      target?.alive &&
-      !deadPlayers.has(mafiaTarget)
-    ) {
-      deadPlayers.add(mafiaTarget);
+  // -------------------------------
+  // SAVVAL GOODMAN PURCHASE
+  // Any purchase attempt cancels the normal mafia shot for this night.
+  // -------------------------------
+  let purchaseUsed = purchaseSnapshot.size > 0;
+  let purchaseTarget = "";
+  let purchaseTargetName = "";
+  let purchaseSuccess = false;
 
-      mafiaKilledPlayer =
-        target.nickname ??
-        target.name ??
-        "";
+  purchaseSnapshot.forEach((actionDoc) => {
+    const data = actionDoc.data();
+    purchaseTarget = data.targetId ?? "";
+    purchaseSuccess = data.success === true;
+  });
 
-      batch.update(
-        doc(
-          db,
-          "games",
-          gameId,
-          "players",
-          mafiaTarget
-        ),
-        {
-          alive: false,
-          eliminated: true,
-        }
-      );
+  if (purchaseTarget) {
+    const target = players.find((p) => p.id === purchaseTarget);
+    purchaseTargetName = target?.nickname ?? target?.name ?? "";
 
-      batch.update(
-        doc(db, "games", gameId),
-        {
-          alivePlayers: increment(-1),
-        }
-      );
+    // Successful purchase is applied immediately by savvalGoodman.ts.
+    // Here we only preserve the result in the night log; the role must not
+    // be converted a second time during night resolution.
+    if (purchaseSuccess && target?.alive && target.role === "mafia") {
+      // No-op intentionally: the target is already Mafia.
     }
   }
 
-  // --------------------------------
-  // SNIPER
-  // --------------------------------
+  // -------------------------------
+  // MAFIA KILL
+  // -------------------------------
+  let mafiaKilledPlayer = "";
+  let mafiaBlockedByPurchase = purchaseUsed;
+  let detectiveVestTriggered = false;
 
+  if (mafiaTarget && !mafiaBlockedByPurchase) {
+    const target = players.find((p) => p.id === mafiaTarget);
+
+    // Detective's one-shot vest absorbs the first mafia shot.
+    if (target?.role === "detective" && target.vestActive && target.alive) {
+      detectiveVestTriggered = true;
+      batch.update(doc(db, "games", gameId, "players", target.id), {
+        vestActive: false,
+      });
+    } else if (target?.alive && !deadPlayers.has(mafiaTarget)) {
+      if (mafiaTarget !== doctorSave) {
+        deadPlayers.add(mafiaTarget);
+        mafiaKilledPlayer = target.nickname ?? target.name ?? "";
+        batch.update(doc(db, "games", gameId, "players", mafiaTarget), {
+          alive: false,
+          eliminated: true,
+        });
+        batch.update(doc(db, "games", gameId), { alivePlayers: increment(-1) });
+      }
+    }
+  }
+
+  // -------------------------------
+  // SNIPER
+  // -------------------------------
   let sniperKilledPlayer = "";
   let sniperDied = false;
   let sniperWasSaved = false;
 
-  if (
-    sniperTarget &&
-    sniperTarget !== "SKIP"
-  ) {
-    const target = players.find(
-      (player) =>
-        player.id === sniperTarget
-    );
-
+  if (sniperTarget && sniperTarget !== "SKIP") {
+    const target = players.find((p) => p.id === sniperTarget);
     if (target) {
-      const isMafia =
-        target.role === "mafia" ||
-        target.role === "godfather";
-
-      // اسنایپر مافیا را زده
-      if (isMafia) {
-        if (
-          target.alive &&
-          !deadPlayers.has(target.id)
-        ) {
+      if (isMafiaRole(target.role)) {
+        if (target.alive && !deadPlayers.has(target.id)) {
           deadPlayers.add(target.id);
-
-          sniperKilledPlayer =
-            target.nickname ??
-            target.name ??
-            "";
-
-          batch.update(
-            doc(
-              db,
-              "games",
-              gameId,
-              "players",
-              target.id
-            ),
-            {
-              alive: false,
-              eliminated: true,
-            }
-          );
-
-          batch.update(
-            doc(db, "games", gameId),
-            {
-              alivePlayers: increment(-1),
-            }
-          );
+          sniperKilledPlayer = target.nickname ?? target.name ?? "";
+          batch.update(doc(db, "games", gameId, "players", target.id), {
+            alive: false,
+            eliminated: true,
+          });
+          batch.update(doc(db, "games", gameId), { alivePlayers: increment(-1) });
         }
-      }
-
-      // اسنایپر شهروند را زده
-      else if (sniperId) {
-        const sniper = players.find(
-          (player) =>
-            player.id === sniperId
-        );
-
-        // دکتر اسنایپر را نجات داده
+      } else if (sniperId) {
+        const sniper = players.find((p) => p.id === sniperId);
         if (doctorSave === sniperId) {
           sniperWasSaved = true;
-          sniperDied = false;
-        }
-
-        // اسنایپر می‌میرد
-        else if (
-          sniper?.alive &&
-          !deadPlayers.has(sniperId)
-        ) {
+        } else if (sniper?.alive && !deadPlayers.has(sniperId)) {
           deadPlayers.add(sniperId);
-
           sniperDied = true;
-
-          batch.update(
-            doc(
-              db,
-              "games",
-              gameId,
-              "players",
-              sniperId
-            ),
-            {
-              alive: false,
-              eliminated: true,
-            }
-          );
-
-          batch.update(
-            doc(db, "games", gameId),
-            {
-              alivePlayers: increment(-1),
-            }
-          );
+          batch.update(doc(db, "games", gameId, "players", sniperId), {
+            alive: false,
+            eliminated: true,
+          });
+          batch.update(doc(db, "games", gameId), { alivePlayers: increment(-1) });
         }
       }
     }
   }
 
-  // ================================================
+  // -------------------------------
   // PROMOTE NEW GODFATHER
-  // ================================================
-
+  // -------------------------------
   const godfatherAlive = players.some(
-    (player) =>
-      player.role === "godfather" &&
-      player.alive &&
-      !deadPlayers.has(player.id)
+    (player) => player.role === "godfather" && player.alive && !deadPlayers.has(player.id),
   );
-
-  let promotedGodfatherId: string | null =
-    null;
-
+  let promotedGodfatherId: string | null = null;
   let promotedGodfatherName = "";
 
   if (!godfatherAlive) {
     const newGodfather = players.find(
       (player) =>
-        player.role === "mafia" &&
+        (player.role === "savval_goodman" || player.role === "mafia") &&
         player.alive &&
-        !deadPlayers.has(player.id)
+        !deadPlayers.has(player.id),
     );
-
     if (newGodfather) {
-      promotedGodfatherId =
-        newGodfather.id;
-
-      promotedGodfatherName =
-        newGodfather.nickname ??
-        newGodfather.name ??
-        "";
-
-      batch.update(
-        doc(
-          db,
-          "games",
-          gameId,
-          "players",
-          newGodfather.id
-        ),
-        {
-          role: "godfather",
-        }
-      );
+      promotedGodfatherId = newGodfather.id;
+      promotedGodfatherName = newGodfather.nickname ?? newGodfather.name ?? "";
+      batch.update(doc(db, "games", gameId, "players", newGodfather.id), {
+        role: "godfather",
+      });
     }
   }
 
-  // ================================================
-  // SAVE COMPLETE NIGHT LOG
-  // این قسمت برای پنل جدید هاست است
-  // ================================================
-
   const nightLog = {
     resolvedAt: Date.now(),
-
     mafia: {
       actorId: godfatherId,
       actorName: godfatherName,
       targetId: mafiaTarget,
       targetName: mafiaTargetName,
       killedPlayer: mafiaKilledPlayer,
-      blockedByDoctor:
-        !!mafiaTarget &&
-        mafiaTarget === doctorSave,
+      blockedByDoctor: !!mafiaTarget && mafiaTarget === doctorSave,
+      blockedByPurchase: mafiaBlockedByPurchase,
+      detectiveVestTriggered,
     },
-
+    slaughter: {
+      targetId: slaughterTarget || null,
+      targetName: slaughterTargetName,
+      guessedRole: slaughterGuessedRole,
+      correct: slaughterCorrect,
+      killedPlayer: slaughterKilledPlayer,
+    },
+    purchase: {
+      targetId: purchaseTarget || null,
+      targetName: purchaseTargetName,
+      success: purchaseSuccess,
+      used: purchaseUsed,
+    },
     doctor: {
       actorId: doctorId,
       actorName: doctorName,
       targetId: doctorSave,
       targetName: doctorSaveName,
-      savedMafiaTarget:
-        !!mafiaTarget &&
-        mafiaTarget === doctorSave,
-      savedSniper:
-        sniperWasSaved,
+      savedMafiaTarget: !!mafiaTarget && mafiaTarget === doctorSave,
+      savedSniper: sniperWasSaved,
     },
-
     detective: {
       actorId: detectiveId,
       actorName: detectiveName,
       targetId: detectiveTargetId,
       targetName: detectiveTargetName,
       result: detectiveResult,
+      vestTriggered: detectiveVestTriggered,
     },
-
     sniper: {
       actorId: sniperId,
       actorName: sniperName,
@@ -501,101 +307,55 @@ export async function resolveNight(gameId: string) {
       sniperDied,
       sniperWasSaved,
     },
-
     promotedGodfather: {
       playerId: promotedGodfatherId,
       playerName: promotedGodfatherName,
     },
-
     deadPlayers: Array.from(deadPlayers),
   };
 
-  // ================================================
-  // SAVE NIGHT RESULT
-  // ================================================
-
-  batch.update(
-    doc(db, "games", gameId),
-    {
-      lastNightResult: {
-        mafiaTarget,
-        doctorSave,
-        mafiaKilledPlayer,
-        sniperKilledPlayer,
-        sniperDied,
-        sniperWasSaved,
-        deadPlayers: Array.from(deadPlayers),
-        resolvedAt: Date.now(),
-      },
-
-      // لاگ کامل برای پنل هاست
-      lastNightLog: nightLog,
-    }
-  );
-
-  // ================================================
-  // RESET PLAYERS
-  // ================================================
+  batch.update(doc(db, "games", gameId), {
+    lastNightResult: {
+      mafiaTarget,
+      doctorSave,
+      mafiaKilledPlayer,
+      sniperKilledPlayer,
+      sniperDied,
+      sniperWasSaved,
+      slaughterTarget: slaughterTarget || null,
+      slaughterCorrect,
+      slaughterKilledPlayer,
+      purchaseTarget: purchaseTarget || null,
+      purchaseSuccess,
+      mafiaBlockedByPurchase,
+      detectiveVestTriggered,
+      deadPlayers: Array.from(deadPlayers),
+      resolvedAt: Date.now(),
+    },
+    lastNightLog: nightLog,
+  });
 
   players.forEach((player) => {
-    if (
-      !deadPlayers.has(player.id) &&
-      player.alive
-    ) {
-      batch.update(
-        doc(
-          db,
-          "games",
-          gameId,
-          "players",
-          player.id
-        ),
-        {
-          canUseAbility: true,
-          canVote: true,
-          vote: null,
-        }
-      );
+    if (!deadPlayers.has(player.id) && player.alive) {
+      batch.update(doc(db, "games", gameId, "players", player.id), {
+        canUseAbility: true,
+        canVote: true,
+        vote: null,
+        purchasedThisNight: false,
+      });
     }
   });
 
-  // ================================================
-  // CLEAR NIGHT ACTIONS
-  // ================================================
+  for (const snapshot of [mafiaVotesSnapshot, doctorSnapshot, detectiveSnapshot, sniperSnapshot, slaughterSnapshot, purchaseSnapshot]) {
+    snapshot.forEach((actionDoc) => batch.delete(actionDoc.ref));
+  }
 
-  mafiaVotesSnapshot.forEach((actionDoc) => {
-    batch.delete(actionDoc.ref);
+  batch.update(doc(db, "games", gameId), {
+    phase: "day",
+    dayVotingOpen: false,
+    currentDay: increment(1),
   });
-
-  doctorSnapshot.forEach((actionDoc) => {
-    batch.delete(actionDoc.ref);
-  });
-
-  detectiveSnapshot.forEach((actionDoc) => {
-    batch.delete(actionDoc.ref);
-  });
-
-  sniperSnapshot.forEach((actionDoc) => {
-    batch.delete(actionDoc.ref);
-  });
-
-  // ================================================
-  // NEXT DAY
-  // ================================================
-
-  batch.update(
-    doc(db, "games", gameId),
-    {
-      phase: "day",
-      dayVotingOpen: false,
-      currentDay: increment(1),
-    }
-  );
 
   await batch.commit();
-
   return nightLog;
-
-  // Host decides when the game ends.
-  // No automatic winner detection.
 }

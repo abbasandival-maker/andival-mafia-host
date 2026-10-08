@@ -19,7 +19,9 @@ export type Role =
   | "CITIZEN"
   | "MAFIA"
   | "GODFATHER"
+  | "SAVVAL_GOODMAN"
   | "DOCTOR"
+  | "DETECTIVE"
   | "SNIPER";
 
 export interface Player {

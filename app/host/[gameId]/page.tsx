@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useEffect, useState } from "react";
+import { use, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Play, Moon } from "lucide-react";
 
@@ -50,6 +50,7 @@ type SecondVoteData = {
   playerId: string;
   targetId: string;
   choice: SecondVoteChoice;
+  secondVoteId?: string;
   createdAt?: number;
 };
 
@@ -177,6 +178,8 @@ export default function HostPage({ params }: Props) {
     setSecondVoteOpen,
   ] = useState(false);
 
+  const [secondVoteId, setSecondVoteId] = useState<string | null>(null);
+
   const [
     secondVoteTargetId,
     setSecondVoteTargetId,
@@ -232,6 +235,8 @@ export default function HostPage({ params }: Props) {
         setSecondVoteTargetId(
           game.secondVoteTargetId ?? null
         );
+
+        setSecondVoteId(game.secondVoteId ?? null);
 
         setLastNightLog(
           game.lastNightLog ?? null
@@ -326,6 +331,9 @@ export default function HostPage({ params }: Props) {
                 voteData.choice as
                   SecondVoteChoice,
 
+              secondVoteId:
+                voteData.secondVoteId ?? "",
+
               createdAt:
                 voteData.createdAt,
             };
@@ -417,6 +425,7 @@ export default function HostPage({ params }: Props) {
           secondVoteOpen: false,
 
           secondVoteTargetId: null,
+          secondVoteId: null,
 
           updatedAt:
             serverTimestamp(),
@@ -425,6 +434,7 @@ export default function HostPage({ params }: Props) {
 
       setSecondVotes([]);
       setDayVotes([]);
+      setSecondVoteId(null);
       setVoteResults([]);
       setSelectedElimination(null);
 
@@ -557,6 +567,10 @@ export default function HostPage({ params }: Props) {
           secondVoteTargetId:
             selectedElimination,
 
+          // هر رأی YES/NO یک شناسه مستقل دارد؛
+          // بنابراین رأی‌های راندهای قبلی وارد راند جدید نمی‌شوند.
+          secondVoteId: `${Date.now()}_${selectedElimination}`,
+
           dayVotingOpen: false,
 
           updatedAt:
@@ -591,6 +605,7 @@ export default function HostPage({ params }: Props) {
         {
           // رأی دوم بسته شد
           secondVoteOpen: false,
+          secondVoteId: null,
 
           // بازگشت به روز
           phase: "day",
@@ -670,6 +685,7 @@ export default function HostPage({ params }: Props) {
           secondVoteOpen: false,
 
           secondVoteTargetId: null,
+          secondVoteId: null,
 
           updatedAt:
             serverTimestamp(),
@@ -709,6 +725,7 @@ export default function HostPage({ params }: Props) {
           secondVoteOpen: false,
 
           secondVoteTargetId: null,
+          secondVoteId: null,
 
           updatedAt:
             serverTimestamp(),
@@ -739,8 +756,8 @@ export default function HostPage({ params }: Props) {
   const currentSecondVotes =
     secondVotes.filter(
       (vote) =>
-        vote.targetId ===
-        secondVoteTargetId
+        vote.targetId === secondVoteTargetId &&
+        vote.secondVoteId === secondVoteId
     );
 
   const yesVotes =

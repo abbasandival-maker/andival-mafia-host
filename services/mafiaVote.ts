@@ -1,7 +1,7 @@
 import {
   doc,
   setDoc,
-  updateDoc,
+  getDoc,
 } from "firebase/firestore";
 
 import { db } from "@/lib/firebase";
@@ -11,21 +11,53 @@ export async function mafiaVote(
   playerId: string,
   targetId: string
 ) {
-  // ثبت رأی گادفادر
-  await setDoc(
-    doc(db, "games", gameId, "mafiaVotes", playerId),
-    {
-      godfatherId: playerId,
-      targetId,
-      createdAt: Date.now(),
-    }
+  const playerRef = doc(
+    db,
+    "games",
+    gameId,
+    "players",
+    playerId
   );
 
-  // پایان اکشن شب گادفادر
-  await updateDoc(
-    doc(db, "games", gameId, "players", playerId),
-    {
-      canUseAbility: false,
-    }
+  const playerSnap = await getDoc(playerRef);
+
+  if (!playerSnap.exists()) {
+    throw new Error("PLAYER_NOT_FOUND");
+  }
+
+  const player = playerSnap.data();
+
+  if (
+    !["godfather", "savval_goodman", "mafia"].includes(
+      player.role
+    )
+  ) {
+    throw new Error("NOT_MAFIA");
+  }
+
+  if (player.alive === false) {
+    throw new Error("DEAD_PLAYER");
+  }
+
+  // مافیا فقط یک شلیک عادی در هر شب دارد.
+  // این قابلیت نباید با Slaughter مشترک باشد.
+  const mafiaVoteRef = doc(
+    db,
+    "games",
+    gameId,
+    "mafiaVotes",
+    playerId
   );
+
+  const existingVote = await getDoc(mafiaVoteRef);
+
+  if (existingVote.exists()) {
+    throw new Error("MAFIA_VOTE_ALREADY_USED");
+  }
+
+  await setDoc(mafiaVoteRef, {
+    godfatherId: playerId,
+    targetId,
+    createdAt: Date.now(),
+  });
 }

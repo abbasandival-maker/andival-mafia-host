@@ -6,7 +6,6 @@ import {
 } from "firebase/firestore";
 
 import { db } from "@/lib/firebase";
-import { checkWinner } from "@/services/checkWinner";
 
 export async function finishDay(
   gameId: string,
@@ -60,6 +59,6 @@ export async function finishDay(
 
   await batch.commit();
 
-  // بررسی برنده
-  await checkWinner(gameId);
+  // Winner is decided manually by the Host.
+  // The game must continue through Constantine/revive decisions.
 }

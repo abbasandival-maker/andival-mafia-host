@@ -1,6 +1,6 @@
-"use client";
+﻿"use client";
 
-import { use, useEffect, useState } from "react";
+import { use, useEffect, useRef, useState } from "react";
 
 import { listenPlayer } from "@/services/listenPlayer";
 import { listenGamePlayers } from "@/services/listenGamePlayers";
@@ -10,6 +10,8 @@ import { mafiaVote } from "@/services/mafiaVote";
 import { doctorSave } from "@/services/doctorSave";
 import { detectiveCheck } from "@/services/detectiveCheck";
 import { sniperShoot } from "@/services/sniperShoot";
+import { useSlaughter, type SlaughterRole } from "@/services/slaughter";
+import { buyCitizen } from "@/services/savvalGoodman";
 import { dayVote, secondVote, type SecondVoteChoice } from "@/services/dayVote";
 import { sendMafiaMessage } from "@/services/sendMafiaMessage";
 import { listenMafiaChat } from "@/services/listenMafiaChat";
@@ -38,6 +40,12 @@ type Player = {
   investigatedPlayer?: string;
 
   secondVoteChoice?: SecondVoteChoice | null;
+  hasSelfSaved?: boolean;
+  vestActive?: boolean;
+  slaughterUsed?: boolean;
+  purchaseUsed?: boolean;
+  purchasedThisNight?: boolean;
+  purchasedBy?: string;
 };
 
 export default function PlayPage({ params }: Props) {
@@ -52,12 +60,18 @@ export default function PlayPage({ params }: Props) {
   const [winner, setWinner] = useState("");
 const [dayVotingOpen, setDayVotingOpen] = useState(false);
   const [secondVoteTargetId, setSecondVoteTargetId] = useState<string | null>(null);
-  const [secondVoteSubmitted, setSecondVoteSubmitted] = useState(false);
-  const [selectedSecondVote, setSelectedSecondVote] =
-    useState<SecondVoteChoice | null>(null);
+ const [secondVoteId, setSecondVoteId] = useState<string | null>(null);
+ const [secondVoteSubmitted, setSecondVoteSubmitted] = useState(false);
+ const previousSecondVoteId = useRef<string | null>(null);
+ const [selectedSecondVote, setSelectedSecondVote] =
+   useState<SecondVoteChoice | null>(null);
 
   const [selectedTarget, setSelectedTarget] =
     useState<string | null>(null);
+  const [selectedSlaughterTarget, setSelectedSlaughterTarget] = useState<string | null>(null);
+  const [mafiaVoteSubmitted, setMafiaVoteSubmitted] = useState(false);
+  const [selectedSlaughterRole, setSelectedSlaughterRole] = useState<SlaughterRole>("doctor");
+  const [selectedPurchaseTarget, setSelectedPurchaseTarget] = useState<string | null>(null);
 
   const [selectedDoctorTarget, setSelectedDoctorTarget] =
     useState<string | null>(null);
@@ -72,7 +86,8 @@ const [dayVotingOpen, setDayVotingOpen] = useState(false);
     useState<string | null>(null);
 const [chatMessages, setChatMessages] = useState<any[]>([]);
 const [chatInput, setChatInput] = useState("");
-  // اطلاعات بازیکن
+const chatMessagesRef = useRef<HTMLDivElement | null>(null);
+  // Ø§Ø·Ù„Ø§Ø¹Ø§Øª Ø¨Ø§Ø²ÛŒÚ©Ù†
   useEffect(() => {
     const playerId = localStorage.getItem("playerId");
     if (!playerId) return;
@@ -84,7 +99,7 @@ const [chatInput, setChatInput] = useState("");
     return () => unsubscribe();
   }, [gameId]);
 
-  // همه بازیکنان
+  // Ù‡Ù…Ù‡ Ø¨Ø§Ø²ÛŒÚ©Ù†Ø§Ù†
   useEffect(() => {
     const unsubscribe = listenGamePlayers(gameId, (data: Player[]) => {
       setPlayers(data);
@@ -93,55 +108,75 @@ const [chatInput, setChatInput] = useState("");
     return () => unsubscribe();
   }, [gameId]);
 
-  // وضعیت بازی
+  // ÙˆØ¶Ø¹ÛŒØª Ø¨Ø§Ø²ÛŒ
   useEffect(() => {
     const unsubscribe = listenGame(gameId, (game) => {
       if (!game) return;
 
       setPhase(game.phase);
+      if (game.phase !== "night") {
+        setMafiaVoteSubmitted(false);
+        setSelectedTarget(null);
+      }
 setGameStatus(game.status ?? "");
 setWinner(game.winner ?? "");
 setDayVotingOpen(game.dayVotingOpen ?? false);
-      setSecondVoteTargetId(game.secondVoteTargetId ?? null);
 
-      if (game.phase !== "second_vote") {
-        setSecondVoteSubmitted(false);
-        setSelectedSecondVote(null);
-      }
+const newSecondVoteId = game.secondVoteId ?? null;
+
+setSecondVoteTargetId(game.secondVoteTargetId ?? null);
+setSecondVoteId(newSecondVoteId);
+
+// Reset YES / NO state when a NEW second-vote round starts.
+// Consecutive rounds both use "second_vote", so we use
+// secondVoteId to identify the new round.
+if (
+  newSecondVoteId !== null &&
+  newSecondVoteId !== previousSecondVoteId.current
+) {
+  setSecondVoteSubmitted(false);
+  setSelectedSecondVote(null);
+}
+
+previousSecondVoteId.current = newSecondVoteId;
+
+// Leaving second vote, or clearing its ID, resets the local state.
+if (
+  game.phase !== "second_vote" ||
+  newSecondVoteId === null
+) {
+  setSecondVoteSubmitted(false);
+  setSelectedSecondVote(null);
+}
     });
 
     return () => unsubscribe();
   }, [gameId]);
-useEffect(() => {
-  if (
-    player?.role !== "mafia" &&
-    player?.role !== "godfather"
-  )
-    return;
 
-  const unsubscribe = listenMafiaChat(
-    gameId,
-    setChatMessages
-  );
-
-  return () => unsubscribe();
-}, [gameId, player]);async function handleSendMessage() {
+async function handleSendMafiaMessage() {
   const playerId = localStorage.getItem("playerId");
 
   if (!playerId || !player) return;
+  if (!chatInput.trim()) return;
 
-  await sendMafiaMessage(
-    gameId,
-    playerId,
-    player.nickname,
-    chatInput
-  );
+  try {
+    await sendMafiaMessage(
+      gameId,
+      playerId,
+      player.nickname,
+      chatInput
+    );
 
-  setChatInput("");
+    setChatInput("");
+  } catch (error) {
+    console.error(error);
+    alert("Failed to send message.");
+  }
 }
 useEffect(() => {
   if (
     player?.role !== "mafia" &&
+    player?.role !== "savval_goodman" &&
     player?.role !== "godfather"
   ) {
     return;
@@ -155,27 +190,178 @@ useEffect(() => {
   return () => unsubscribe();
 }, [gameId, player]);
   // -----------------------
+
+useEffect(() => {
+  const container = chatMessagesRef.current;
+  if (!container) return;
+
+  const distanceFromBottom =
+    container.scrollHeight -
+    container.scrollTop -
+    container.clientHeight;
+
+  const isNearBottom = distanceFromBottom < 80;
+
+  if (isNearBottom) {
+    container.scrollTop = container.scrollHeight;
+  }
+}, [chatMessages]);
   // Mafia
   // -----------------------
 
-  async function handleMafiaVote(targetId: string) {
+       async function handleMafiaVote(targetId: string) {
+         const playerId = localStorage.getItem("playerId");
+
+         console.log("=== MAFIA DEBUG ===");
+         console.log("gameId:", gameId);
+         console.log("localStorage playerId:", playerId);
+         console.log("UI player:", player);
+         console.log("UI player id:", player?.id);
+         console.log("UI player nickname:", player?.nickname);
+         console.log("UI player role:", player?.role);
+         console.log("targetId:", targetId);
+
+         if (!playerId) {
+           console.error("MAFIA ERROR: playerId not found in localStorage");
+           alert("Player ID not found.");
+           return;
+         }
+
+         if (mafiaVoteSubmitted || loading) {
+           console.log("MAFIA ACTION BLOCKED:", {
+             mafiaVoteSubmitted,
+             loading,
+           });
+           return;
+         }
+
+         setLoading(true);
+
+         try {
+           await mafiaVote(gameId, playerId, targetId);
+
+           setMafiaVoteSubmitted(true);
+           setSelectedTarget(targetId);
+
+           console.log("MAFIA VOTE SUCCESS");
+
+           alert("Victim Selected");
+         } catch (error) {
+           console.error("MAFIA VOTE ERROR:", error);
+
+           const message =
+             error instanceof Error ? error.message : "";
+
+           console.error("MAFIA VOTE ERROR CODE:", message);
+
+           if (message === "MAFIA_VOTE_ALREADY_USED") {
+             setMafiaVoteSubmitted(true);
+             alert("You have already selected a victim tonight.");
+           } else if (message === "NOT_MAFIA") {
+             alert("ERROR: Firebase says this player is not Mafia.");
+           } else if (message === "DEAD_PLAYER") {
+             alert("Dead players cannot select a victim.");
+           } else if (message === "PLAYER_NOT_FOUND") {
+             alert("Player was not found in this game.");
+           } else {
+             alert(message || "Failed to select victim.");
+           }
+         } finally {
+           setLoading(false);
+         }
+       }
+  // -----------------------
+  // Slaughter / Savval Goodman
+  // -----------------------
+
+  async function handleSlaughter() {
+  const playerId = localStorage.getItem("playerId");
+
+  console.log("=== SLAUGHTER DEBUG ===");
+  console.log("playerId:", playerId);
+  console.log("UI player:", player);
+  console.log("UI player role:", player?.role);
+  console.log("selected target:", selectedSlaughterTarget);
+  console.log("selected role:", selectedSlaughterRole);
+
+  if (!playerId || !selectedSlaughterTarget) return;
+
+  setLoading(true);
+
+  try {
+    const result = await useSlaughter(
+      gameId,
+      playerId,
+      selectedSlaughterTarget,
+      selectedSlaughterRole
+    );
+
+    alert(
+      result.correct
+        ? "Slaughter successful."
+        : "Slaughter failed. Wrong role guess."
+    );
+
+    setSelectedSlaughterTarget(null);
+  } catch (error) {
+    console.error(error);
+    alert(error instanceof Error ? error.message : "Failed");
+  } finally {
+    setLoading(false);
+  }
+}
+  async function handleBuyCitizen() {
     const playerId = localStorage.getItem("playerId");
 
-    if (!playerId) return;
+    if (!playerId || !selectedPurchaseTarget || !player) return;
+
+    if (player.role !== "savval_goodman") return;
+
+    if (
+      player.purchaseUsed === true ||
+      !player.canUseAbility ||
+      loading
+    ) {
+      return;
+    }
 
     setLoading(true);
 
     try {
-      await mafiaVote(gameId, playerId, targetId);
-      alert("Victim Selected");
+      const result = await buyCitizen(
+        gameId,
+        playerId,
+        selectedPurchaseTarget
+      );
+
+      setSelectedPurchaseTarget(null);
+
+      alert(
+        result.success
+          ? "Purchase successful. Target became Mafia. Mafia shot is cancelled tonight."
+          : "Purchase failed. Target was not a Citizen. Mafia shot is still cancelled tonight."
+      );
     } catch (error) {
       console.error(error);
-      alert("Failed");
+
+      const message =
+        error instanceof Error ? error.message : "";
+
+      if (message === "PURCHASE_ALREADY_USED") {
+        alert("You have already used Buy Citizen.");
+      } else if (message === "NOT_SAVVAL_GOODMAN") {
+        alert("Only Savval Goodman can use this ability.");
+      } else if (message === "DEAD_PLAYER") {
+        alert("Dead players cannot use this ability.");
+      } else if (message === "INVALID_PURCHASE_TARGET") {
+        alert("Invalid purchase target.");
+      } else {
+        alert(message || "Purchase failed.");
+      }
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   }
-
   // -----------------------
   // Doctor
   // -----------------------
@@ -192,7 +378,10 @@ useEffect(() => {
       alert("Player Saved");
     } catch (error) {
       console.error(error);
-      alert("Failed");
+      const message = error instanceof Error ? error.message : "";
+      alert(message === "DOCTOR_SELF_SAVE_ALREADY_USED"
+        ? "You can save yourself only once during the whole game."
+        : "Failed");
     }
 
     setLoading(false);
@@ -322,6 +511,18 @@ async function handleSecondVote(choice: SecondVoteChoice) {
 const secondVoteTarget =
   players.find((p) => p.id === secondVoteTargetId) ?? null;
 
+const roleBackgrounds: Record<string, string> = {
+  godfather: "/role-backgrounds/godfather.jpg",
+  savval_goodman: "/role-backgrounds/savval-goodman.jpg",
+  mafia: "/role-backgrounds/mafia.jpg",
+  doctor: "/role-backgrounds/doctor.jpg",
+  detective: "/role-backgrounds/detective.jpg",
+  sniper: "/role-backgrounds/sniper.jpg",
+  citizen: "/role-backgrounds/citizen.jpg",
+};
+
+const roleBackground = roleBackgrounds[player?.role ?? "citizen"] ?? roleBackgrounds.citizen;
+
 if (gameStatus === "finished") {
   return (
     <main className="min-h-screen bg-[#0B0B0F] flex items-center justify-center text-white">
@@ -332,8 +533,8 @@ if (gameStatus === "finished") {
 
         <p className="mt-8 text-3xl">
           {winner === "mafia"
-            ? "☠ Mafia Wins"
-            : "🏆 Citizens Win"}
+            ? "â˜  Mafia Wins"
+            : "ðŸ† Citizens Win"}
         </p>
       </div>
     </main>
@@ -349,28 +550,15 @@ if (!player) {
 const isNight = phase === "night";
 return (
   <main
-  className={`min-h-screen flex items-center justify-center p-6 transition-all duration-700
-
-${
-isNight
-? "bg-gradient-to-b from-black via-zinc-900 to-slate-950 text-white"
-: "bg-gradient-to-b from-sky-100 via-white to-yellow-50 text-zinc-900"
-}
-
-`}
+  className="min-h-screen flex items-center justify-center p-4 sm:p-6 transition-all duration-700 bg-cover bg-center bg-fixed text-white"
+  style={{
+    backgroundImage: `linear-gradient(rgba(0,0,0,0.64), rgba(0,0,0,0.82)), url(${roleBackground})`,
+  }}
 >
 
     <div
-className={`w-full max-w-lg rounded-2xl p-8 border transition-all duration-700
-
-${
-isNight
-? "bg-zinc-900 border-zinc-700"
-: "bg-white border-slate-300 shadow-2xl"
-}
-
-`}
->
+      className="w-full max-w-lg rounded-2xl p-5 sm:p-8 border border-white/15 bg-black/65 backdrop-blur-xl shadow-2xl transition-all duration-700"
+    >
 
       <p className="text-gray-400">
         Room
@@ -392,7 +580,10 @@ isNight
 
       </div>
 
-      <div className="mt-8 rounded-xl bg-black border border-yellow-500 p-6">
+      <div
+        className="mt-8 overflow-hidden rounded-xl border border-yellow-500/70 bg-black/70 p-6 shadow-2xl"
+        style={{ backgroundImage: `linear-gradient(rgba(0,0,0,0.58), rgba(0,0,0,0.82)), url(${roleBackground})`, backgroundSize: "cover", backgroundPosition: "center" }}
+      >
 
         <p className="text-gray-400">
           Your Role
@@ -404,16 +595,38 @@ isNight
 
       </div>
       
+        {phase === "night" &&
+          player.alive &&
+          player.role === "mafia" &&
+          player.purchasedThisNight && (
+            <div className="mt-8 rounded-xl border border-red-500/70 bg-black/75 p-6 shadow-2xl backdrop-blur-xl">
+              <div className="rounded-xl border border-emerald-500/50 bg-emerald-950/50 p-4">
+                <p className="text-lg font-black text-emerald-300">âœ… Ø®Ø±ÛŒØ¯ Ù…ÙˆÙÙ‚ â€” Ø´Ù…Ø§ Ù…Ø§ÙÛŒØ§ Ø´Ø¯ÛŒØ¯</p>
+                <p className="mt-2 text-sm text-zinc-200">Ø§Ø² Ù‡Ù…ÛŒÙ† Ù„Ø­Ø¸Ù‡ Ù‡Ù…â€ŒØªÛŒÙ…ÛŒâ€ŒÙ‡Ø§ÛŒ Ù…Ø§ÙÛŒØ§ Ø±Ø§ Ù…ÛŒâ€ŒØ¨ÛŒÙ†ÛŒØ¯. Ø´Ù„ÛŒÚ© Ù…Ø§ÙÛŒØ§ Ø¨Ø±Ø§ÛŒ Ø§ÛŒÙ† Ø´Ø¨ Ù‚Ø¨Ù„Ø§Ù‹ Ù„ØºÙˆ Ø´Ø¯Ù‡ Ø§Ø³Øª.</p>
+              </div>
+              <div className="mt-5 rounded-lg bg-black/50 p-4">
+                <p className="mb-2 font-bold text-red-300">Ù‡Ù…â€ŒØªÛŒÙ…ÛŒâ€ŒÙ‡Ø§ÛŒ Ù…Ø§ÙÛŒØ§</p>
+                {players.filter((p) =>
+                  p.alive &&
+                  p.id !== player.id &&
+                  (p.role === "mafia" || p.role === "savval_goodman" || p.role === "godfather")
+                ).map((m) => (
+                  <p key={m.id} className="text-gray-200">â€¢ {m.nickname}</p>
+                ))}
+              </div>
+            </div>
+          )}
+
         {/* ========================= */}
         {/* MAFIA */}
         {/* ========================= */}
 {phase === "night" &&
   player.alive &&
-  (player.role === "godfather" || player.role === "mafia") &&
-  player.canUseAbility && (
+  (player.role === "godfather" || player.role === "savval_goodman" || player.role === "mafia") &&
+  (
     <div className="mt-8 rounded-xl bg-red-950 border border-red-700 p-6">
       <h3 className="text-2xl font-bold text-red-400">
-        ☠ Mafia
+        â˜  Mafia
       </h3>
 
       {/* Mafia Team */}
@@ -426,6 +639,7 @@ isNight
           .filter(
             (p) =>
               (p.role === "mafia" ||
+                p.role === "savval_goodman" ||
                 p.role === "godfather") &&
               p.id !== player.id &&
               p.alive
@@ -435,7 +649,7 @@ isNight
               key={m.id}
               className="text-gray-300"
             >
-              • {m.nickname}
+              â€¢ {m.nickname}
             </p>
           ))}
       </div>
@@ -443,10 +657,10 @@ isNight
       {/* Mafia Chat */}
       <div className="mt-6 rounded-xl bg-black/40 p-4">
         <h3 className="mb-3 font-bold text-red-400">
-          💬 Mafia Chat
+          ðŸ’¬ Mafia Chat
         </h3>
 
-        <div className="h-48 overflow-y-auto rounded-lg bg-zinc-900 p-3 space-y-2">
+        <div ref={chatMessagesRef} className="h-48 overflow-y-auto rounded-lg bg-zinc-900 p-3 space-y-2">
           {chatMessages.map((msg) => (
             <div key={msg.id}>
               <span className="font-bold text-red-400">
@@ -475,7 +689,7 @@ isNight
 
     if (!chatInput.trim()) return;
 
-    await handleSendMessage();
+    await handleSendMafiaMessage();
 
   }}
 
@@ -484,7 +698,7 @@ isNight
 />
 
           <button
-            onClick={handleSendMessage}
+            onClick={handleSendMafiaMessage}
             className="rounded-lg bg-red-600 px-5"
           >
             Send
@@ -492,11 +706,11 @@ isNight
         </div>
       </div>
 
-      {/* Godfather Only */}
-      {player.role === "godfather" && (
+      {/* Godfather Night Kill */}
+      {player.role === "godfather" && !mafiaVoteSubmitted && (
         <>
           <h3 className="mt-6 mb-4 text-xl font-bold text-red-400">
-            🎯 Select Victim
+            ðŸŽ¯ Select Victim
           </h3>
 
           <div className="space-y-3">
@@ -505,6 +719,7 @@ isNight
                 (p) =>
                   p.id !== player.id &&
                   p.role !== "mafia" &&
+                  p.role !== "savval_goodman" &&
                   p.role !== "godfather" &&
                   p.alive
               )
@@ -528,7 +743,7 @@ selectedTarget === target.id
 
   <span>
 
-    {(selectedTarget === target.id) && "🔫 "}
+    {(selectedTarget === target.id) && "ðŸ”« "}
 
     {target.nickname}
 
@@ -537,7 +752,7 @@ selectedTarget === target.id
   {selectedTarget === target.id && (
 
     <span className="text-2xl">
-      ✅
+      âœ…
     </span>
 
   )}
@@ -556,9 +771,91 @@ selectedTarget === target.id
             }
             className="mt-6 w-full rounded-xl bg-red-600 py-4 text-lg font-bold hover:bg-red-500 disabled:opacity-40"
           >
-            🔴 Confirm Kill
+            ðŸ”´ Confirm Kill
           </button>
         </>
+      )}
+
+      {player.role === "godfather" &&
+        player.slaughterUsed !== true && (
+        <div className="mt-8 rounded-xl border border-purple-700 bg-purple-950/60 p-5">
+          <h3 className="text-xl font-bold text-purple-300">ðŸ—¡ï¸ Slaughter</h3>
+         <p className="mt-1 text-sm text-gray-300">
+           One use per game
+         </p>
+
+
+
+          <select
+            value={selectedSlaughterTarget ?? ""}
+            onChange={(e) =>
+              setSelectedSlaughterTarget(e.target.value || null)
+            }
+            disabled={loading}
+            className="mt-4 w-full rounded-lg bg-zinc-800 p-3 text-white"
+          >
+            <option value="">Select target player</option>
+
+            {players
+              .filter(
+                (p) =>
+                  p.id !== player.id &&
+                  p.alive !== false
+              )
+              .map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.nickname}
+                </option>
+              ))}
+          </select>
+          <select
+            value={selectedSlaughterRole}
+            onChange={(e) =>
+              setSelectedSlaughterRole(e.target.value as SlaughterRole)
+            }
+            disabled={loading}
+            className="mt-4 w-full rounded-lg bg-zinc-800 p-3 text-white"
+          >
+            <option value="doctor">Doctor</option>
+            <option value="detective">Detective</option>
+            <option value="sniper">Sniper</option>
+          </select>
+
+          <button
+            disabled={!selectedSlaughterTarget || loading}
+            onClick={handleSlaughter}
+            className="mt-4 w-full rounded-xl bg-purple-700 py-3 font-bold hover:bg-purple-600 disabled:opacity-40"
+          >
+            ðŸ—¡ï¸ Confirm Slaughter
+          </button>
+        </div>
+      )}
+
+      {player.role === "savval_goodman" && (
+        <div className="mt-8 rounded-xl border border-amber-700 bg-amber-950/60 p-5">
+          <h3 className="text-xl font-bold text-amber-300">ðŸ’° Buy Citizen</h3>
+          <p className="mt-1 text-sm text-gray-300">One use per game. Buying cancels the Mafia shot for this night.</p>
+
+          <select
+            value={selectedPurchaseTarget ?? ""}
+            onChange={(e) => setSelectedPurchaseTarget(e.target.value || null)}
+            disabled={loading || !player.canUseAbility || player.purchaseUsed === true}
+            className="mt-4 w-full rounded-lg bg-zinc-800 p-3 text-white"
+          >
+            <option value="">Select player</option>
+            {players.filter((p) => p.id !== player.id && p.alive).map((p) => (
+              <option key={p.id} value={p.id}>{p.nickname}</option>
+            ))}
+          </select>
+
+          <button
+            disabled={!selectedPurchaseTarget || loading || !player.canUseAbility || player.purchaseUsed === true}
+            onClick={handleBuyCitizen}
+            className="mt-4 w-full rounded-xl bg-amber-600 py-3 font-bold hover:bg-amber-500 disabled:opacity-40"
+          >
+            ðŸ’° Confirm Purchase
+          </button>
+        </div>
       )}
     </div>
 )}
@@ -566,15 +863,15 @@ selectedTarget === target.id
 {phase === "night" &&
   player.alive &&
   player.role === "godfather" &&
-  !player.canUseAbility && (
+  mafiaVoteSubmitted && (
     <div className="mt-8 rounded-xl border border-green-700 bg-zinc-800 p-6">
       <h3 className="text-3xl font-black text-red-400">
-        ☠ MAFIA
+        â˜  MAFIA
       </h3>
 
       <div className="mt-6 rounded-xl border border-green-700 bg-green-900 p-5">
         <h3 className="text-xl font-bold">
-          ✅ Kill Submitted
+          âœ… Kill Submitted
         </h3>
 
         <p className="mt-2 text-gray-300">
@@ -594,13 +891,13 @@ selectedTarget === target.id
   <div className="mt-8 rounded-xl bg-blue-950 border border-blue-700 p-6">
 
     <h3 className="text-2xl font-bold text-blue-400 mb-5">
-      🩺 Choose Someone To Save
+      ðŸ©º Choose Someone To Save
     </h3>
 
     <div className="space-y-3">
 
       {players
-        .filter((p) => p.alive)
+        .filter((p) => p.alive && (p.id !== player.id || player.hasSelfSaved !== true))
         .map((target) => (
 
           <button
@@ -620,7 +917,7 @@ selectedDoctorTarget === target.id
 
   <span>
 
-    {selectedDoctorTarget === target.id && "🩺 "}
+    {selectedDoctorTarget === target.id && "ðŸ©º "}
 
     {target.nickname}
 
@@ -629,7 +926,7 @@ selectedDoctorTarget === target.id
   {selectedDoctorTarget === target.id && (
 
     <span className="text-2xl">
-      ✅
+      âœ…
     </span>
 
   )}
@@ -646,7 +943,7 @@ selectedDoctorTarget === target.id
       onClick={() => handleDoctorSave(selectedDoctorTarget!)}
       className="w-full mt-6 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-40 py-4 font-bold text-lg"
     >
-      🩺 Confirm Save
+      ðŸ©º Confirm Save
     </button>
 
   </div>
@@ -660,13 +957,13 @@ selectedDoctorTarget === target.id
   <div className="mt-8 rounded-xl bg-blue-950 border border-blue-700 p-6">
 
     <h3 className="text-3xl font-black text-blue-400">
-      🩺 DOCTOR
+      ðŸ©º DOCTOR
     </h3>
 
     <div className="mt-6 rounded-xl bg-green-900 border border-green-700 p-5">
 
       <h3 className="text-xl font-bold">
-        ✅ Protection Submitted
+        âœ… Protection Submitted
       </h3>
 
       <p className="mt-2 text-gray-300">
@@ -689,9 +986,10 @@ selectedDoctorTarget === target.id
 
   <div className="mt-8 rounded-xl bg-indigo-950 border border-indigo-700 p-6">
 
-    <h3 className="text-2xl font-bold text-indigo-400 mb-5">
-      🔎 Investigate Player
+    <h3 className="text-2xl font-bold text-indigo-400 mb-2">
+      ðŸ”Ž Investigate Player
     </h3>
+    <p className="mb-5 text-sm text-gray-300">Vest: {player.vestActive ? "ACTIVE â€” survives one Mafia shot" : "USED"}</p>
 
     <div className="space-y-3">
 
@@ -720,7 +1018,7 @@ selectedDetectiveTarget === target.id
 
   <span>
 
-    {selectedDetectiveTarget === target.id && "🔎 "}
+    {selectedDetectiveTarget === target.id && "ðŸ”Ž "}
 
     {target.nickname}
 
@@ -729,7 +1027,7 @@ selectedDetectiveTarget === target.id
   {selectedDetectiveTarget === target.id && (
 
     <span className="text-2xl">
-      ✅
+      âœ…
     </span>
 
   )}
@@ -746,7 +1044,7 @@ selectedDetectiveTarget === target.id
       onClick={() => handleDetectiveCheck(selectedDetectiveTarget!)}
       className="w-full mt-6 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 py-4 font-bold text-lg"
     >
-      🔎 Confirm Check
+      ðŸ”Ž Confirm Check
     </button>
 
   </div>
@@ -760,13 +1058,13 @@ selectedDetectiveTarget === target.id
   <div className="mt-8 rounded-xl bg-indigo-950 border border-indigo-700 p-6">
 
     <h3 className="text-3xl font-black text-indigo-400">
-      🔎 DETECTIVE
+      ðŸ”Ž DETECTIVE
     </h3>
 
     <div className="mt-6 rounded-xl bg-green-900 border border-green-700 p-5">
 
       <h3 className="text-xl font-bold">
-        ✅ Investigation Submitted
+        âœ… Investigation Submitted
       </h3>
 
       <p className="mt-4 text-3xl font-black text-yellow-400">
@@ -793,7 +1091,7 @@ selectedDetectiveTarget === target.id
   <div className="mt-8 rounded-xl bg-orange-950 border border-orange-700 p-6">
 
     <h3 className="text-2xl font-bold text-orange-400 mb-5">
-      🎯 Choose Target
+      ðŸŽ¯ Choose Target
     </h3>
 
     <div className="space-y-3">
@@ -823,7 +1121,7 @@ selectedSniperTarget === target.id
 
   <span>
 
-    {selectedSniperTarget === target.id && "🎯 "}
+    {selectedSniperTarget === target.id && "ðŸŽ¯ "}
 
     {target.nickname}
 
@@ -832,7 +1130,7 @@ selectedSniperTarget === target.id
   {selectedSniperTarget === target.id && (
 
     <span className="text-2xl">
-      ✅
+      âœ…
     </span>
 
   )}
@@ -847,7 +1145,7 @@ selectedSniperTarget === target.id
         onClick={() => handleSniper(selectedSniperTarget!)}
         className="w-full rounded-xl bg-orange-600 hover:bg-orange-500 disabled:opacity-40 transition p-4 mt-4 font-bold"
       >
-        🎯 Confirm Shoot
+        ðŸŽ¯ Confirm Shoot
       </button>
 
       <button
@@ -855,7 +1153,7 @@ selectedSniperTarget === target.id
         disabled={loading}
         className="w-full rounded-xl bg-zinc-700 hover:bg-zinc-600 transition p-4 mt-2 font-bold"
       >
-        ⏭ Skip Tonight
+        â­ Skip Tonight
       </button>
 
     </div>
@@ -871,13 +1169,13 @@ selectedSniperTarget === target.id
   <div className="mt-8 rounded-xl bg-orange-950 border border-orange-700 p-6">
 
     <h3 className="text-3xl font-black text-orange-400">
-      🎯 SNIPER
+      ðŸŽ¯ SNIPER
     </h3>
 
     <div className="mt-6 rounded-xl bg-green-900 border border-green-700 p-5">
 
       <h3 className="text-xl font-bold">
-        ✅ Action Submitted
+        âœ… Action Submitted
       </h3>
 
       <p className="mt-2 text-gray-300">
@@ -894,6 +1192,7 @@ selectedSniperTarget === target.id
         {/* ========================= */}
 {phase === "night" &&
 player.role !== "mafia" &&
+player.role !== "savval_goodman" &&
 player.role !== "godfather" &&
 player.role !== "doctor" &&
 player.role !== "detective" &&
@@ -902,7 +1201,7 @@ player.role !== "sniper" && (
   <div className="mt-8 rounded-xl bg-zinc-800 p-5">
 
     <h3 className="font-bold">
-      🌙 Night Phase
+      ðŸŒ™ Night Phase
     </h3>
 
     <p className="mt-2 text-gray-400">
@@ -931,7 +1230,7 @@ player.role !== "sniper" && (
       </div>
     ) : (
       <div className="mt-8 rounded-xl border border-green-700 bg-green-950/60 p-5 text-center">
-        <h4 className="text-xl font-black text-green-300">✓ Vote Submitted</h4>
+        <h4 className="text-xl font-black text-green-300">âœ“ Vote Submitted</h4>
         <p className="mt-2 text-zinc-300">Your vote: <span className="font-black text-white">{selectedSecondVote ?? "SUBMITTED"}</span></p>
         <p className="mt-2 text-sm text-zinc-400">Waiting for the host's final decision...</p>
       </div>
@@ -954,7 +1253,7 @@ player.role !== "sniper" && (
   <div className="mt-8 rounded-xl bg-zinc-800 p-5">
 
     <h3 className="font-bold text-xl mb-4">
-      ☀️ Day Voting
+      â˜€ï¸ Day Voting
     </h3>
 
     <div className="space-y-3">
@@ -986,7 +1285,7 @@ selectedVoteTarget === target.id
 
   <span>
 
-    {selectedVoteTarget === target.id && "🗳️ "}
+    {selectedVoteTarget === target.id && "ðŸ—³ï¸ "}
 
     {target.nickname}
 
@@ -995,7 +1294,7 @@ selectedVoteTarget === target.id
   {selectedVoteTarget === target.id && (
 
     <span className="text-2xl">
-      ✅
+      âœ…
     </span>
 
   )}
@@ -1014,7 +1313,7 @@ selectedVoteTarget === target.id
       }
       className="w-full mt-6 rounded-xl bg-red-600 hover:bg-red-500 disabled:opacity-40 py-4 font-bold"
     >
-      🗳 Confirm Vote
+      ðŸ—³ Confirm Vote
     </button>
 
   </div>
@@ -1027,12 +1326,12 @@ selectedVoteTarget === target.id
  !player.canVote && (
     <div className="mt-8 rounded-xl border border-green-700 bg-zinc-800 p-6">
       <h3 className="text-3xl font-black text-yellow-400">
-        ☀️ DAY
+        â˜€ï¸ DAY
       </h3>
 
       <div className="mt-6 rounded-xl border border-green-700 bg-green-900 p-5">
         <h3 className="text-xl font-bold">
-          ✅ Vote Submitted
+          âœ… Vote Submitted
         </h3>
 
         <p className="mt-2 text-gray-300">
@@ -1046,3 +1345,11 @@ selectedVoteTarget === target.id
     </main>
   );
 }
+
+
+
+
+
+
+
+

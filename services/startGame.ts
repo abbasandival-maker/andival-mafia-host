@@ -31,7 +31,7 @@ export async function startGame(gameId: string) {
   const players = snapshot.docs.map((docSnap) => ({
     id: docSnap.id,
     ...docSnap.data(),
-  }));
+  })) as Array<{ id: string; role?: string }>;
 
   if (players.length < 6) {
     throw new Error("Minimum 6 players required.");
@@ -67,6 +67,10 @@ export async function startGame(gameId: string) {
 
         sniperTarget: null,
         sniperResult: "",
+        hasSelfSaved: false,
+        vestActive: roles[index] === "detective",
+        slaughterUsed: false,
+        purchaseUsed: roles[index] === "savval_goodman" ? false : true,
       }
     );
   });

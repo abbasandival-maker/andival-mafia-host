@@ -111,6 +111,11 @@ export async function secondVote(
 
   const targetId =
     game.secondVoteTargetId;
+  const secondVoteId = game.secondVoteId;
+
+  if (!secondVoteId) {
+    throw new Error("SECOND_VOTE_ID_NOT_FOUND");
+  }
 
   if (!targetId) {
     throw new Error(
@@ -151,7 +156,7 @@ export async function secondVote(
     "games",
     gameId,
     "secondVotes",
-    playerId
+    `${secondVoteId}_${playerId}`
   );
 
   const existingVote =
@@ -168,6 +173,7 @@ export async function secondVote(
     playerId,
     targetId,
     choice,
+    secondVoteId,
     createdAt: Date.now(),
   });
 

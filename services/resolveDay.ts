@@ -90,7 +90,7 @@ export async function resolveDay(gameId: string) {
   if (!godfatherAlive) {
     const newGodfather = players.find(
       (p) =>
-        p.role === "mafia" &&
+        (p.role === "mafia" || p.role === "savval_goodman") &&
         p.alive &&
         p.id !== eliminatedPlayer
     );
